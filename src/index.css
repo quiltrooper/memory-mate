@@ -1,0 +1,60 @@
+@import "tailwindcss";
+
+@theme {
+  --color-canvas: #FAF9F6;
+  --color-charcoal: #2D2E2E;
+  --color-sage: #7C9070;
+  --color-sage-hover: #687A5E;
+  --color-sage-dark: #53624B;
+  --color-sage-light: #F0F3EE;
+  --color-sage-border: #D5DFD0;
+  --color-border-clean: #E5E1D8;
+  --color-border-muted: #EFECE6;
+
+  /* Harmonize theme colors with Clean Minimalism palette */
+  --color-emerald-50: #F3F6F2;
+  --color-emerald-100: #E6ECE4;
+  --color-emerald-200: #D3DECD;
+  --color-emerald-300: #B7C7AE;
+  --color-emerald-400: #99AD8E;
+  --color-emerald-500: #7C9070;
+  --color-emerald-600: #687A5E;
+  --color-emerald-700: #7C9070;
+  --color-emerald-800: #5C6E53;
+  --color-emerald-900: #424F3B;
+  --color-emerald-950: #2C3528;
+
+  --color-teal-50: #F3F6F3;
+  --color-teal-100: #E6ECE6;
+  --color-teal-200: #D1DDD1;
+  --color-teal-600: #687A5E;
+  --color-teal-700: #7C9070;
+  --color-teal-800: #5C6E53;
+  --color-teal-900: #384233;
+
+  --color-stone-50: #FAF9F6;
+  --color-stone-100: #F5F3EF;
+  --color-stone-200: #E5E1D8;
+  --color-stone-300: #D6D1C6;
+  --color-stone-400: #A8A39A;
+  --color-stone-500: #73706A;
+  --color-stone-600: #575551;
+  --color-stone-700: #403E3A;
+  --color-stone-800: #2D2E2E;
+  --color-stone-900: #2D2E2E;
+  --color-stone-950: #1D1E1E;
+}
+
+@layer base {
+  body {
+    font-family: 'Plus Jakarta Sans', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+    color: #2D2E2E;
+    background-color: #FAF9F6;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  input, textarea, select, button {
+    font-family: inherit;
+  }
+}
+

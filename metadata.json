@@ -1,0 +1,10 @@
+{
+  "name": "Memory Mate",
+  "description": "AI-powered Cognitive Assessment and Memory Assistance Platform for elderly dementia patients in Northeast India",
+  "requestFramePermissions": [
+    "microphone"
+  ],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}
