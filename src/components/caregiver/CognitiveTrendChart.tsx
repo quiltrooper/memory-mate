@@ -1,7 +1,7 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import {
   ResponsiveContainer,
-  LineChart,
+  ComposedChart,
   Line,
   XAxis,
   YAxis,
@@ -10,19 +10,33 @@ import {
   CartesianGrid,
 } from 'recharts';
 import { TrendPoint } from '../../types';
-import { TrendingUp, Brain, Focus, Zap } from 'lucide-react';
+import { TrendingUp, Brain, Focus, Zap, Info } from 'lucide-react';
+import { computeBenchmarkCurves, BENCHMARK_SAMPLE_SIZES } from '../../utils/benchmarks';
 
 interface CognitiveTrendChartProps {
   data: TrendPoint[];
+  showBenchmarks?: boolean;
 }
 
-export const CognitiveTrendChart: React.FC<CognitiveTrendChartProps> = ({ data }) => {
+export const CognitiveTrendChart: React.FC<CognitiveTrendChartProps> = ({ data, showBenchmarks = true }) => {
   const latestPoint = data[data.length - 1] || { memory: 72, attention: 80, executive: 75, composite: 76 };
   const firstPoint = data[0] || { memory: 78, attention: 82, executive: 76, composite: 79 };
 
   const memoryChange = latestPoint.memory - firstPoint.memory;
   const attentionChange = latestPoint.attention - firstPoint.attention;
   const execChange = latestPoint.executive - firstPoint.executive;
+
+  const benchmarks = useMemo(() => computeBenchmarkCurves(), []);
+
+  // Merge the active patient's real data with benchmark reference curves for overlay
+  const chartData = useMemo(() => {
+    return data.map((point, i) => ({
+      ...point,
+      decliningAvg: benchmarks[i]?.decliningAvg,
+      improvingAvg: benchmarks[i]?.improvingAvg,
+      stableAvg: benchmarks[i]?.stableAvg,
+    }));
+  }, [data, benchmarks]);
 
   return (
     <div id="cognitive-trend-chart-card" className="bg-white rounded-2xl p-6 border border-[#E5E1D8] shadow-xs space-y-6">
@@ -45,6 +59,18 @@ export const CognitiveTrendChart: React.FC<CognitiveTrendChartProps> = ({ data }
           </span>
         </div>
       </div>
+
+      {showBenchmarks && (
+        <div className="flex items-start gap-2 text-xs text-[#5C6E53] bg-[#F0F3EE] border border-[#D5DFD0] rounded-xl p-3">
+          <Info className="w-4 h-4 shrink-0 mt-0.5" />
+          <span>
+            <strong>Synthetic Demo Dataset:</strong> The dashed reference lines below are averaged from a
+            100-profile synthetic dataset modeled on general dementia progression patterns commonly seen in
+            medical literature worldwide (not real patient records). They let you compare this patient's actual
+            trend against typical decline, stable, and care-driven improvement trajectories.
+          </span>
+        </div>
+      )}
 
       {/* Domain Quick Metric Pills */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
@@ -103,10 +129,10 @@ export const CognitiveTrendChart: React.FC<CognitiveTrendChartProps> = ({ data }
         </div>
       </div>
 
-      {/* Recharts Line Chart */}
+      {/* Recharts Line Chart with Benchmark Overlays */}
       <div className="h-72 w-full pt-2">
         <ResponsiveContainer width="100%" height="100%">
-          <LineChart data={data} margin={{ top: 10, right: 20, left: -10, bottom: 0 }}>
+          <ComposedChart data={chartData} margin={{ top: 10, right: 20, left: -10, bottom: 0 }}>
             <CartesianGrid strokeDasharray="3 3" stroke="#E5E1D8" />
             <XAxis
               dataKey="week"
@@ -115,7 +141,7 @@ export const CognitiveTrendChart: React.FC<CognitiveTrendChartProps> = ({ data }
               tickLine={false}
             />
             <YAxis
-              domain={[50, 100]}
+              domain={[30, 100]}
               stroke="#73706A"
               fontSize={12}
               tickLine={false}
@@ -136,9 +162,43 @@ export const CognitiveTrendChart: React.FC<CognitiveTrendChartProps> = ({ data }
               iconType="circle"
               wrapperStyle={{ fontSize: '13px', fontWeight: 600, color: '#2D2E2E' }}
             />
+            {showBenchmarks && (
+              <>
+                <Line
+                  type="monotone"
+                  name={`Typical Decline (n=${BENCHMARK_SAMPLE_SIZES.decliningCount})`}
+                  dataKey="decliningAvg"
+                  stroke="#C97B4A"
+                  strokeWidth={2}
+                  strokeDasharray="5 4"
+                  dot={false}
+                  activeDot={false}
+                />
+                <Line
+                  type="monotone"
+                  name={`Typical Improvement (n=${BENCHMARK_SAMPLE_SIZES.improvingCount})`}
+                  dataKey="improvingAvg"
+                  stroke="#4A7FC9"
+                  strokeWidth={2}
+                  strokeDasharray="5 4"
+                  dot={false}
+                  activeDot={false}
+                />
+                <Line
+                  type="monotone"
+                  name={`Typical Stable (n=${BENCHMARK_SAMPLE_SIZES.stableCount})`}
+                  dataKey="stableAvg"
+                  stroke="#A8A39A"
+                  strokeWidth={2}
+                  strokeDasharray="5 4"
+                  dot={false}
+                  activeDot={false}
+                />
+              </>
+            )}
             <Line
               type="monotone"
-              name="Memory Domain"
+              name="This Patient — Memory"
               dataKey="memory"
               stroke="#7C9070"
               strokeWidth={3}
@@ -147,7 +207,7 @@ export const CognitiveTrendChart: React.FC<CognitiveTrendChartProps> = ({ data }
             />
             <Line
               type="monotone"
-              name="Attention Domain"
+              name="This Patient — Attention"
               dataKey="attention"
               stroke="#5C6E53"
               strokeWidth={3}
@@ -156,14 +216,14 @@ export const CognitiveTrendChart: React.FC<CognitiveTrendChartProps> = ({ data }
             />
             <Line
               type="monotone"
-              name="Executive Function"
+              name="This Patient — Executive"
               dataKey="executive"
-              stroke="#A8A39A"
+              stroke="#384233"
               strokeWidth={3}
               activeDot={{ r: 6 }}
               dot={{ r: 3 }}
             />
-          </LineChart>
+          </ComposedChart>
         </ResponsiveContainer>
       </div>
 

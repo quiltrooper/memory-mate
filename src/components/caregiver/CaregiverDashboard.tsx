@@ -151,6 +151,43 @@ export const CaregiverDashboard: React.FC<CaregiverDashboardProps> = ({
     speakText('Patient cognitive dataset exported successfully for AI training.', language);
   };
 
+  const handleExportAllTrainingData = () => {
+    const bulkExport = {
+      exportedAt: new Date().toISOString(),
+      platform: 'Memory Mate Dementia Cognitive Care',
+      datasetType: 'Synthetic + Demo — Northeast India Longitudinal Cognitive Dataset',
+      totalPatients: patients.length,
+      patients: patients.map((p) => ({
+        anonymizedCode: `SUBJ-${p.profile.id.toUpperCase()}`,
+        age: p.profile.age,
+        gender: p.profile.gender,
+        diagnosis: p.profile.diagnosis,
+        locationRegion: p.profile.location,
+        clinicalTrends: p.trendData,
+        gameSessionsLogs: p.gameSessions.map((s) => ({
+          sessionId: s.id,
+          timestamp: s.timestamp,
+          gameType: s.gameType,
+          accuracyPercent: s.accuracy,
+          averageLatencyMs: s.responseTimeMs,
+          errorCount: s.errors,
+          adaptiveLevel: s.level,
+          geminiScore: s.score,
+          clinicalTrend: s.trend,
+        })),
+      })),
+    };
+
+    const dataStr = 'data:text/json;charset=utf-8,' + encodeURIComponent(JSON.stringify(bulkExport, null, 2));
+    const downloadAnchor = document.createElement('a');
+    downloadAnchor.setAttribute('href', dataStr);
+    downloadAnchor.setAttribute('download', `memory_mate_full_training_dataset_${patients.length}_patients.json`);
+    document.body.appendChild(downloadAnchor);
+    downloadAnchor.click();
+    downloadAnchor.remove();
+    speakText(`Full training dataset with ${patients.length} patients exported successfully.`, language);
+  };
+
   const handleCreatePatient = (e: React.FormEvent) => {
     e.preventDefault();
     if (!newName.trim()) return;
@@ -239,39 +276,35 @@ export const CaregiverDashboard: React.FC<CaregiverDashboardProps> = ({
                 <span className="text-xs bg-[#F0F3EE] text-[#5C6E53] font-semibold px-2 py-0.5 rounded-md border border-[#D5DFD0]">
                   {patients.length} {language === 'as' ? 'ৰোগী সংৰক্ষিত' : language === 'hi' ? 'मरीज़ डेटासेट्स' : 'Datasets'}
                 </span>
+                <span className="text-xs bg-[#FDF3E7] text-[#8C5E28] font-semibold px-2 py-0.5 rounded-md border border-[#F0DDBB]">
+                  {language === 'as' ? 'কৃত্ৰিম ডেম' : language === 'hi' ? 'सिंथेटिक डेमो' : 'Synthetic Demo Data'}
+                </span>
               </div>
               <p className="text-xs text-[#73706A]">
                 {language === 'as'
                   ? 'ভিন্ন লিংগ আৰু স্তৰৰ ৰোগীৰ তথ্য বাছনি কৰক বা ভৱিষ্যত এআই প্ৰশিক্ষণৰ বাবে ৰপ্তানি কৰক।'
                   : language === 'hi'
                   ? 'विभिन्न वृद्धजनों का डेटा चुनें अथवा भविष्य में एआई मॉडल प्रशिक्षण हेतु डाउनलोड करें।'
-                  : 'Select active patient or export anonymized longitudinal session logs to train and evaluate AI models.'}
+                  : 'Synthetic reference dataset (modeled on general worldwide dementia trends) used to benchmark new real patients against typical decline, stable, and improvement trajectories.'}
               </p>
             </div>
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
-            {/* Quick Patient Switcher Pills */}
-            <div className="flex items-center gap-1.5 overflow-x-auto py-1">
-              {patients.map((p) => {
-                const isSelected = p.profile.id === activePatientId;
-                return (
-                  <button
-                    key={p.profile.id}
-                    type="button"
-                    onClick={() => onSelectPatient && onSelectPatient(p.profile.id)}
-                    className={`px-3 py-1.5 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-all whitespace-nowrap border ${
-                      isSelected
-                        ? 'bg-[#7C9070] text-white border-[#7C9070] shadow-2xs'
-                        : 'bg-[#FAF9F6] hover:bg-[#F5F3EF] text-[#2D2E2E] border-[#E5E1D8]'
-                    }`}
-                  >
-                    <UserCheck className={`w-3.5 h-3.5 ${isSelected ? 'text-white' : 'text-[#7C9070]'}`} />
-                    <span>{p.profile.name}</span>
-                    <span className="text-[10px] opacity-80">({p.profile.gender})</span>
-                  </button>
-                );
-              })}
+            {/* Patient Switcher: searchable dropdown for large datasets */}
+            <div className="relative w-full sm:w-64">
+              <select
+                value={activePatientId}
+                onChange={(e) => onSelectPatient && onSelectPatient(e.target.value)}
+                className="w-full appearance-none px-3.5 py-2 pr-8 bg-[#FAF9F6] border border-[#E5E1D8] rounded-xl text-sm font-semibold text-[#2D2E2E] focus:outline-none focus:border-[#7C9070] cursor-pointer"
+              >
+                {patients.map((p) => (
+                  <option key={p.profile.id} value={p.profile.id}>
+                    {p.profile.name} ({p.profile.gender}, {p.profile.age}y) — {p.profile.location.split(',')[0]}
+                  </option>
+                ))}
+              </select>
+              <UserCheck className="w-4 h-4 text-[#7C9070] absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
             </div>
 
             {/* Export for Training */}
@@ -282,7 +315,24 @@ export const CaregiverDashboard: React.FC<CaregiverDashboardProps> = ({
               title="Export JSON for model training"
             >
               <Download className="w-3.5 h-3.5 text-[#7C9070]" />
-              <span>{language === 'as' ? 'প্ৰশিক্ষণ তথ্য সংগ্ৰহ (JSON)' : language === 'hi' ? 'प्रशिक्षण डेटा निर्यात (JSON)' : 'Export for AI Training'}</span>
+              <span>{language === 'as' ? 'প্ৰশিক্ষণ তথ্য সংগ্ৰহ (JSON)' : language === 'hi' ? 'प्रशिक्षण डेटा निर्यात (JSON)' : 'Export Current Patient'}</span>
+            </button>
+
+            {/* Bulk Export All Patients */}
+            <button
+              type="button"
+              onClick={handleExportAllTrainingData}
+              className="px-3.5 py-1.5 bg-[#F0F3EE] hover:bg-[#E5EBE0] text-[#5C6E53] border border-[#D5DFD0] hover:border-[#7C9070] rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-all shadow-2xs"
+              title={`Export all ${patients.length} patients as one JSON training dataset`}
+            >
+              <Database className="w-3.5 h-3.5 text-[#7C9070]" />
+              <span>
+                {language === 'as'
+                  ? `সকলো (${patients.length}) ৰপ্তানি কৰক`
+                  : language === 'hi'
+                  ? `सभी (${patients.length}) निर्यात करें`
+                  : `Export All ${patients.length} (Training Set)`}
+              </span>
             </button>
 
             {/* Add New Patient */}

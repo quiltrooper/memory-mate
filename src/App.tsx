@@ -13,7 +13,7 @@ import {
   Language,
   PatientDataset,
 } from './types';
-import { INITIAL_PATIENTS } from './data/initialData';
+import { INITIAL_PATIENTS, ALL_PATIENTS } from './data/initialData';
 import { speakText } from './utils/speech';
 
 export default function App() {
@@ -25,7 +25,7 @@ export default function App() {
   // Multi-patient datasets state
   const [patients, setPatients] = useState<PatientDataset[]>(() => {
     const saved = localStorage.getItem('mm_patient_datasets');
-    return saved ? JSON.parse(saved) : INITIAL_PATIENTS;
+    return saved ? JSON.parse(saved) : ALL_PATIENTS;
   });
 
   const [activePatientId, setActivePatientId] = useState<string>(() => {
