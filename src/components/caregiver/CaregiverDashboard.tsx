@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import {
   PatientProfile,
   Reminder,
@@ -9,6 +9,7 @@ import {
 } from '../../types';
 import { CognitiveTrendChart } from './CognitiveTrendChart';
 import { CaregiverReminders } from './CaregiverReminders';
+import { predictRisk } from '../../ml/riskModel';
 import {
   ShieldCheck,
   Users,
@@ -66,6 +67,10 @@ export const CaregiverDashboard: React.FC<CaregiverDashboardProps> = ({
   const [weeklySummary, setWeeklySummary] = useState<string>(
     `${patientProfile.name} had a reassuring and active week overall. Visual memory and daily routine participation remained very stable, especially during morning hours. We noticed a slight fatigue pattern during late-afternoon memory recall, so shifting cognitive games to 10:00 AM will provide the gentlest and most encouraging experience.`
   );
+
+  // Custom-trained logistic regression risk classifier — independent of
+  // Gemini. Runs entirely client-side on the last 5 game sessions.
+  const riskPrediction = useMemo(() => predictRisk(gameSessions, 5), [gameSessions]);
 
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [activeCaregiverRole, setActiveCaregiverRole] = useState<'family' | 'asha'>('family');
@@ -374,6 +379,50 @@ export const CaregiverDashboard: React.FC<CaregiverDashboardProps> = ({
                 <p className="text-xs text-[#73706A] italic mt-1.5">
                   "{patientProfile.notes}"
                 </p>
+              )}
+
+              {riskPrediction && (
+                <div className="mt-3">
+                  <div
+                    className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-bold border ${
+                      riskPrediction.label === 'High'
+                        ? 'bg-[#FCEEEE] text-[#9B3B3B] border-[#F0C9C9]'
+                        : riskPrediction.label === 'Medium'
+                        ? 'bg-[#FDF6ED] text-[#8C5E28] border-[#E8D4BE]'
+                        : 'bg-[#F0F3EE] text-[#5C6E53] border-[#D5DFD0]'
+                    }`}
+                    title={`Custom logistic regression model confidence: ${(riskPrediction.confidence * 100).toFixed(0)}%`}
+                  >
+                    <span
+                      className={`w-2 h-2 rounded-full ${
+                        riskPrediction.label === 'High'
+                          ? 'bg-[#C24C4C]'
+                          : riskPrediction.label === 'Medium'
+                          ? 'bg-[#C58A3E]'
+                          : 'bg-[#7C9070]'
+                      }`}
+                    />
+                    <span>
+                      {language === 'as'
+                        ? `জ্ঞানীয় ঝুঁকি: ${riskPrediction.label}`
+                        : language === 'hi'
+                        ? `संज्ञानात्मक जोखिम: ${riskPrediction.label}`
+                        : `Cognitive Risk: ${riskPrediction.label}`}
+                    </span>
+                    <span className="opacity-70 font-semibold">
+                      ({(riskPrediction.confidence * 100).toFixed(0)}%)
+                    </span>
+                  </div>
+                  <p className="text-[11px] text-[#73706A] mt-1.5 max-w-md">
+                    {language === 'en'
+                      ? `Custom-trained model (not Gemini) — based on the last ${Math.min(5, gameSessions.length)} game sessions. Top factor: ${
+                          riskPrediction.topFactors[0]?.feature.replace(/_/g, ' ')
+                        }.`
+                      : language === 'hi'
+                      ? `पिछले ${Math.min(5, gameSessions.length)} सत्रों पर आधारित (स्वतंत्र मॉडल)।`
+                      : `শেষৰ ${Math.min(5, gameSessions.length)} টা সেশ্বনৰ ওপৰত ভিত্তি কৰি (স্বতন্ত্ৰ মডেল)।`}
+                  </p>
+                </div>
               )}
             </div>
 
