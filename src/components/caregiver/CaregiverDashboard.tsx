@@ -10,6 +10,7 @@ import {
 import { CognitiveTrendChart } from './CognitiveTrendChart';
 import { CaregiverReminders } from './CaregiverReminders';
 import { predictRisk } from '../../ml/riskModel';
+import { SmallLLMDemo } from './SmallLLMDemo';
 import {
   ShieldCheck,
   Users,
@@ -352,6 +353,9 @@ export const CaregiverDashboard: React.FC<CaregiverDashboardProps> = ({
           </div>
         </div>
       </div>
+
+      {/* Custom Small Language Model Demo — built from scratch, isolated component */}
+      <SmallLLMDemo />
 
       {/* Patient Profile & Multi-Caregiver Header */}
       <div className="bg-white text-[#2D2E2E] rounded-2xl p-6 sm:p-8 border border-[#E5E1D8] shadow-xs relative overflow-hidden">

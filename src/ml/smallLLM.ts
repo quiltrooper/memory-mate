@@ -1,16 +1,18 @@
 /**
  * A small custom neural language model — built completely from scratch
- * (trained with NumPy + hand-coded backprop, see /ml/build_small_llm.py)
+ * (trained with NumPy + hand-coded backprop, see /ml/build_small_llm_v2.py)
  * — separate from Gemini. Same core architecture as every LLM
  * (embeddings -> neural network -> next-word prediction), just tiny:
- * ~21,000 parameters and a 401-word domain vocabulary, vs. Gemini's
- * billions. Trained only on Memory Mate's own reminders, memory-box
- * captions, and reminiscence prompts.
+ * ~42,000 parameters and a 511-word domain vocabulary, vs. Gemini's
+ * billions. Trained on Memory Mate's own reminders, memory-box
+ * captions, reminiscence prompts, and caregiver check-in phrases
+ * (266 sentences, ~3,000 training tokens).
  *
- * Prediction here is pure math: embedding lookup -> concatenate ->
- * tanh hidden layer -> softmax over vocabulary. No ML framework
- * needed at runtime, so it deploys anywhere (including Vercel) with
- * zero extra dependencies.
+ * Uses temperature-based sampling (not just greedy argmax), so the
+ * SAME prompt can produce genuinely different completions on repeat
+ * calls — e.g. "your family caregiver will..." might complete as
+ * "visit this afternoon" one time and "call you this evening" the
+ * next, both plausible given the training data.
  */
 import { SMALL_LLM_WEIGHTS } from './smallLLMWeights';
 
@@ -21,12 +23,11 @@ vocab.forEach((w, i) => (wordToIdx[w] = i));
 const UNK_IDX = wordToIdx['<UNK>'];
 
 function tokenize(text: string): string[] {
-  return text
-    .toLowerCase()
-    .replace(/,/g, ' ,')
-    .replace(/\./g, ' .')
-    .split(/\s+/)
-    .filter(Boolean);
+  let t = text.toLowerCase();
+  for (const ch of [',', '.', '?', '!']) {
+    t = t.split(ch).join(` ${ch}`);
+  }
+  return t.split(/\s+/).filter(Boolean);
 }
 
 function wordId(w: string): number {
@@ -46,13 +47,11 @@ function softmax(logits: number[]): number[] {
 
 /** Forward pass: context word indices -> probability distribution over vocab. */
 function forward(contextIds: number[]): number[] {
-  // Embedding lookup + concatenate
   const embedFlat: number[] = [];
   for (const id of contextIds) {
     embedFlat.push(...W_embed[id]);
   }
 
-  // Hidden layer: tanh(embedFlat @ W_hidden + b_hidden)
   const hiddenDim = b_hidden.length;
   const h: number[] = new Array(hiddenDim).fill(0);
   for (let j = 0; j < hiddenDim; j++) {
@@ -63,7 +62,6 @@ function forward(contextIds: number[]): number[] {
     h[j] = tanh(sum);
   }
 
-  // Output layer: h @ W_out + b_out
   const vocabSize = b_out.length;
   const logits: number[] = new Array(vocabSize).fill(0);
   for (let k = 0; k < vocabSize; k++) {
@@ -77,30 +75,68 @@ function forward(contextIds: number[]): number[] {
   return softmax(logits);
 }
 
-/** Predict the single most likely next word (greedy, no randomness). */
-export function predictNextWord(contextWords: string[]): string {
+/** Sample an index from a probability distribution (weighted random choice). */
+function sampleFromDistribution(probs: number[]): number {
+  const r = Math.random();
+  let cumulative = 0;
+  for (let i = 0; i < probs.length; i++) {
+    cumulative += probs[i];
+    if (r <= cumulative) return i;
+  }
+  return probs.length - 1;
+}
+
+/**
+ * Predict the next word.
+ * @param greedy If true, always pick the single most likely word (deterministic).
+ *               If false (default), use temperature sampling for variety.
+ * @param temperature Lower = safer/more predictable, higher = more varied/riskier.
+ */
+export function predictNextWord(
+  contextWords: string[],
+  options: { greedy?: boolean; temperature?: number } = {}
+): string {
+  const { greedy = false, temperature = 0.7 } = options;
   let ids = contextWords.slice(-contextSize).map(wordId);
   while (ids.length < contextSize) ids = [UNK_IDX, ...ids];
 
   const probs = forward(ids);
-  let bestIdx = 0;
-  let bestProb = -1;
-  probs.forEach((p, i) => {
-    if (p > bestProb) {
-      bestProb = p;
-      bestIdx = i;
-    }
-  });
-  return vocab[bestIdx];
+
+  if (greedy) {
+    let bestIdx = 0;
+    let bestProb = -1;
+    probs.forEach((p, i) => {
+      if (p > bestProb) {
+        bestProb = p;
+        bestIdx = i;
+      }
+    });
+    return vocab[bestIdx];
+  }
+
+  const adjusted = probs.map((p) => Math.pow(p, 1 / temperature));
+  const sum = adjusted.reduce((a, b) => a + b, 0);
+  const normalized = adjusted.map((p) => p / sum);
+  const idx = sampleFromDistribution(normalized);
+  return vocab[idx];
 }
 
-/** Generate a short domain-specific completion from a prompt. */
-export function generateCompletion(prompt: string, maxWords: number = 8): string {
+/**
+ * Generate a short domain-specific completion from a prompt.
+ * Defaults to temperature sampling (real variety); pass greedy: true
+ * for fully deterministic/reproducible output.
+ */
+export function generateCompletion(
+  prompt: string,
+  maxWords: number = 10,
+  options: { greedy?: boolean; temperature?: number } = {}
+): string {
   const words = tokenize(prompt);
   for (let i = 0; i < maxWords; i++) {
-    const next = predictNextWord(words);
-    if (next === '<UNK>' || next === '.') break;
+    const next = predictNextWord(words, options);
+    if (next === '<UNK>') break;
     words.push(next);
+    if (next === '.' || next === '?' || next === '!') break;
   }
-  return words.join(' ');
+  return words.join(' ').replace(/ ([,.?!])/g, '$1');
 }
