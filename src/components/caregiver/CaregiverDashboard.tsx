@@ -10,7 +10,7 @@ import {
 import { CognitiveTrendChart } from './CognitiveTrendChart';
 import { CaregiverReminders } from './CaregiverReminders';
 import { predictRisk } from '../../ml/riskModel';
-import { SmallLLMDemo } from './SmallLLMDemo';
+import { CareSummary } from './CareSummary';
 import {
   ShieldCheck,
   Users,
@@ -267,8 +267,8 @@ export const CaregiverDashboard: React.FC<CaregiverDashboardProps> = ({
 
   return (
     <div id="caregiver-dashboard-container" className="space-y-6">
-      {/* Patient Training & Research Datasets Management Bar */}
-      <div className="bg-white rounded-2xl p-5 border border-[#E5E1D8] shadow-xs">
+      {/* Kept available for the demo dataset, but visually quiet so care comes first. */}
+      <div className="rounded-2xl border border-[#E8E2D9] bg-[#FAF6F0] p-4">
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-xl bg-[#F0F3EE] text-[#5C6E53] border border-[#D5DFD0] flex items-center justify-center">
@@ -276,22 +276,22 @@ export const CaregiverDashboard: React.FC<CaregiverDashboardProps> = ({
             </div>
             <div>
               <div className="flex items-center gap-2">
-                <h3 className="font-bold text-[#2D2E2E] text-base sm:text-lg">
-                  {language === 'as' ? 'ৰোগী প্ৰশিক্ষণ আৰু গৱেষণা তথ্য' : language === 'hi' ? 'मरीज़ प्रशिक्षण व शोध डेटाबेस' : 'Patient Training & Research Datasets'}
+                <h3 className="font-bold text-[#2D2D2D] text-base sm:text-lg">
+                  {language === 'as' ? 'ৰোগীৰ নথিপত্ৰ' : language === 'hi' ? 'रोगी रिकॉर्ड' : 'Patient records'}
                 </h3>
-                <span className="text-xs bg-[#F0F3EE] text-[#5C6E53] font-semibold px-2 py-0.5 rounded-md border border-[#D5DFD0]">
-                  {patients.length} {language === 'as' ? 'ৰোগী সংৰক্ষিত' : language === 'hi' ? 'मरीज़ डेटासेट्स' : 'Datasets'}
+                <span className="text-xs bg-[#EDF2EE] text-[#58745E] font-semibold px-2 py-0.5 rounded-md border border-[#D5DFD0]">
+                  {patients.length} {language === 'as' ? 'ৰোগী' : language === 'hi' ? 'रोगी' : 'profiles'}
                 </span>
                 <span className="text-xs bg-[#FDF3E7] text-[#8C5E28] font-semibold px-2 py-0.5 rounded-md border border-[#F0DDBB]">
-                  {language === 'as' ? 'কৃত্ৰিম ডেম' : language === 'hi' ? 'सिंथेटिक डेमो' : 'Synthetic Demo Data'}
+                  {language === 'as' ? 'ডেম’ ডাটা' : language === 'hi' ? 'डेमो डेटा' : 'Demo data'}
                 </span>
               </div>
               <p className="text-xs text-[#73706A]">
                 {language === 'as'
-                  ? 'ভিন্ন লিংগ আৰু স্তৰৰ ৰোগীৰ তথ্য বাছনি কৰক বা ভৱিষ্যত এআই প্ৰশিক্ষণৰ বাবে ৰপ্তানি কৰক।'
+                  ? 'এটা প্ৰ’ফাইল বাছক বা ডেম’ ৰেকৰ্ড নিৰাপদে এক্সপ’ৰ্ট কৰক।'
                   : language === 'hi'
-                  ? 'विभिन्न वृद्धजनों का डेटा चुनें अथवा भविष्य में एआई मॉडल प्रशिक्षण हेतु डाउनलोड करें।'
-                  : 'Synthetic reference dataset (modeled on general worldwide dementia trends) used to benchmark new real patients against typical decline, stable, and improvement trajectories.'}
+                  ? 'कोई प्रोफ़ाइल चुनें या डेमो रिकॉर्ड सुरक्षित रूप से निर्यात करें।'
+                  : 'Choose a profile or safely export the local demo records when you need them.'}
               </p>
             </div>
           </div>
@@ -354,30 +354,24 @@ export const CaregiverDashboard: React.FC<CaregiverDashboardProps> = ({
         </div>
       </div>
 
-      {/* Custom Small Language Model Demo — built from scratch, isolated component */}
-      <SmallLLMDemo />
-
-      {/* Patient Profile & Multi-Caregiver Header */}
-      <div className="bg-white text-[#2D2E2E] rounded-2xl p-6 sm:p-8 border border-[#E5E1D8] shadow-xs relative overflow-hidden">
+      {/* Patient-focused caregiver overview, based on the calm Figma care screen. */}
+      <div className="bg-[#FAF6F0] text-[#2D2D2D] rounded-[28px] p-6 sm:p-8 border border-[#E8E2D9] shadow-[0_8px_24px_rgba(67,63,57,0.05)] relative overflow-hidden">
         <div className="relative z-10">
           <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6">
             
             {/* Patient Details */}
             <div>
-              <div className="inline-flex items-center gap-2 bg-[#F0F3EE] px-3 py-1 rounded-full text-xs font-semibold mb-2 border border-[#D5DFD0] text-[#5C6E53]">
-                <ShieldCheck className="w-3.5 h-3.5 text-[#7C9070]" />
-                <span>{language === 'as' ? 'যত্নকৰ্তা আৰু ক্লিনিচিয়ান পৰ্টেল' : language === 'hi' ? 'देखभालकर्ता व चिकित्सक पोर्टल' : 'Caregiver & Clinician Portal'}</span>
+              <div className="inline-flex items-center gap-2 bg-[#EDF2EE] px-3 py-1 rounded-full text-xs font-semibold mb-2 border border-[#D5DFD0] text-[#58745E]">
+                <ShieldCheck className="w-3.5 h-3.5 text-[#698A70]" />
+                <span>{language === 'as' ? 'যত্নকৰ্তাৰ আপডেট' : language === 'hi' ? 'देखभालकर्ता अपडेट' : 'Caregiver update'}</span>
               </div>
-              <h2 className="text-2xl sm:text-3xl font-bold tracking-tight text-[#2D2E2E]">
-                {patientProfile.name}, {patientProfile.age} yrs
-                <span className="text-sm font-normal text-[#73706A] ml-2">({patientProfile.gender})</span>
+              <h2 className="font-serif text-3xl sm:text-4xl font-semibold tracking-tight text-[#2D2D2D]">
+                {language === 'as' ? `${patientProfile.name}ৰ দিনটো` : language === 'hi' ? `${patientProfile.name} का दिन` : `${patientProfile.name}'s day`}
               </h2>
-              <p className="text-[#73706A] text-sm mt-1 flex flex-wrap items-center gap-2">
-                <span className="font-medium text-[#2D2E2E]">{patientProfile.diagnosis}</span>
+              <p className="text-[#5C5C5C] text-sm mt-2 flex flex-wrap items-center gap-2">
+                <span>{language === 'as' ? 'স্থানীয়ভাৱে সংৰক্ষিত ৰেকৰ্ড' : language === 'hi' ? 'स्थानीय रूप से सहेजा गया रिकॉर्ड' : 'Locally saved care record'}</span>
                 <span>•</span>
                 <span>{patientProfile.location}</span>
-                <span>•</span>
-                <span>{language === 'as' ? 'চিকিৎসালয়:' : language === 'hi' ? 'अस्पताल:' : 'Hospital:'} {patientProfile.hospital}</span>
               </p>
               {patientProfile.notes && (
                 <p className="text-xs text-[#73706A] italic mt-1.5">
@@ -388,7 +382,7 @@ export const CaregiverDashboard: React.FC<CaregiverDashboardProps> = ({
               {riskPrediction && (
                 <div className="mt-3">
                   <div
-                    className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-bold border ${
+                    className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-xl text-xs font-bold border ${
                       riskPrediction.label === 'High'
                         ? 'bg-[#FCEEEE] text-[#9B3B3B] border-[#F0C9C9]'
                         : riskPrediction.label === 'Medium'
@@ -408,39 +402,37 @@ export const CaregiverDashboard: React.FC<CaregiverDashboardProps> = ({
                     />
                     <span>
                       {language === 'as'
-                        ? `জ্ঞানীয় ঝুঁকি: ${riskPrediction.label}`
+                        ? `সহায়ৰ সংকেত: ${riskPrediction.label}`
                         : language === 'hi'
-                        ? `संज्ञानात्मक जोखिम: ${riskPrediction.label}`
-                        : `Cognitive Risk: ${riskPrediction.label}`}
+                        ? `सहायता संकेत: ${riskPrediction.label}`
+                        : `Support signal: ${riskPrediction.label}`}
                     </span>
                     <span className="opacity-70 font-semibold">
                       ({(riskPrediction.confidence * 100).toFixed(0)}%)
                     </span>
                   </div>
-                  <p className="text-[11px] text-[#73706A] mt-1.5 max-w-md">
+                  <p className="text-[11px] text-[#5C5C5C] mt-1.5 max-w-md">
                     {language === 'en'
-                      ? `Custom-trained model (not Gemini) — based on the last ${Math.min(5, gameSessions.length)} game sessions. Top factor: ${
-                          riskPrediction.topFactors[0]?.feature.replace(/_/g, ' ')
-                        }.`
+                      ? `A local support prompt based on the last ${Math.min(5, gameSessions.length)} activities. It supports care conversations and does not diagnose dementia.`
                       : language === 'hi'
-                      ? `पिछले ${Math.min(5, gameSessions.length)} सत्रों पर आधारित (स्वतंत्र मॉडल)।`
-                      : `শেষৰ ${Math.min(5, gameSessions.length)} টা সেশ্বনৰ ওপৰত ভিত্তি কৰি (স্বতন্ত্ৰ মডেল)।`}
+                      ? `पिछली ${Math.min(5, gameSessions.length)} गतिविधियों पर आधारित स्थानीय सहायता संकेत। यह निदान नहीं है।`
+                      : `শেষৰ ${Math.min(5, gameSessions.length)} টা কাৰ্যকলাপৰ ওপৰত ভিত্তি কৰা স্থানীয় সহায়ৰ সংকেত। ই কোনো নিৰ্ণয় নহয়।`}
                   </p>
                 </div>
               )}
             </div>
 
             {/* Multi-Caregiver Shared Access UI Badge */}
-            <div className="bg-[#FAF9F6] border border-[#E5E1D8] p-4 rounded-xl max-w-md w-full">
+            <div className="bg-white border border-[#E8E2D9] p-4 rounded-[20px] max-w-md w-full">
               <div className="flex items-center justify-between mb-2">
                 <div className="flex items-center gap-2">
                   <Users className="w-4 h-4 text-[#7C9070]" />
                   <span className="text-xs font-bold uppercase tracking-wider text-[#73706A]">
-                    {language === 'as' ? 'ভাগ-বটোৱাৰা যত্ন প্ৰণালী' : language === 'hi' ? 'साझा देखभालकर्ता प्रणाली' : 'Multi-Caregiver Shared Access'}
+                    {language === 'as' ? 'আজিৰ সহায়কসকল' : language === 'hi' ? 'आज के सहयोगी' : 'People helping today'}
                   </span>
                 </div>
                 <span className="text-[11px] font-semibold text-[#5C6E53] bg-[#F0F3EE] border border-[#D5DFD0] px-2 py-0.5 rounded-md">
-                  Active Sync
+                  Local Device Record
                 </span>
               </div>
 
@@ -491,6 +483,13 @@ export const CaregiverDashboard: React.FC<CaregiverDashboardProps> = ({
         </div>
       </div>
 
+      <CareSummary
+        gameSessions={gameSessions}
+        reminders={reminders}
+        riskPrediction={riskPrediction}
+        onSpeak={(summary) => speakText(summary, language)}
+      />
+
       {/* AI Concerns Panel & Weekly Summary (2 Columns) */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         
@@ -537,8 +536,8 @@ export const CaregiverDashboard: React.FC<CaregiverDashboardProps> = ({
           </div>
 
           <div className="text-xs text-[#73706A] bg-[#FAF9F6] p-3 rounded-xl border border-[#E5E1D8] flex items-center justify-between">
-            <span>{language === 'as' ? `আশা কৰ্মী (${patientProfile.ashaWorker}) সৈতে সংযুক্ত` : language === 'hi' ? `आशा कार्यकर्ता (${patientProfile.ashaWorker}) के साथ साझा` : `Shared with ${patientProfile.ashaWorker}`}</span>
-            <span className="font-semibold text-[#5C6E53]">No acute emergencies</span>
+            <span>{language === 'as' ? `আশা কৰ্মী: ${patientProfile.ashaWorker}` : language === 'hi' ? `आशा कार्यकर्ता: ${patientProfile.ashaWorker}` : `ASHA worker: ${patientProfile.ashaWorker}`}</span>
+            <span className="font-semibold text-[#5C6E53]">Review locally saved records</span>
           </div>
         </div>
 

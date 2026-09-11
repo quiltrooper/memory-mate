@@ -1,5 +1,6 @@
 import { PatientProfile, KnownFace, Reminder, MemoryItem, TrendPoint, GameSession, PatientDataset } from '../types';
 import { GENERATED_PATIENTS } from './generatedPatients';
+import { addDemoFamilyFaces } from './demoFamilyFaces';
 
 export const INITIAL_PATIENTS: PatientDataset[] = [
   {
@@ -449,7 +450,10 @@ export const INITIAL_PATIENTS: PatientDataset[] = [
 // Combine the 3 hand-crafted demo patients with the 100 generated ones,
 // so the app has a full 103-patient dataset for the Caregiver Dashboard,
 // trend charts, and "Export for AI Training" feature.
-export const ALL_PATIENTS: PatientDataset[] = [...INITIAL_PATIENTS, ...GENERATED_PATIENTS];
+export const ALL_PATIENTS: PatientDataset[] = addDemoFamilyFaces([
+  ...INITIAL_PATIENTS,
+  ...GENERATED_PATIENTS,
+]);
 
 export const INITIAL_PATIENT: PatientProfile = INITIAL_PATIENTS[0].profile;
 export const INITIAL_KNOWN_FACES: KnownFace[] = INITIAL_PATIENTS[0].knownFaces;

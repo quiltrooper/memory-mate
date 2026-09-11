@@ -245,8 +245,24 @@ export const PictureMatchingGame: React.FC<PictureMatchingGameProps> = ({
       speakText(session.supportiveMessage || '', language);
     } catch (err) {
       console.error(err);
+      const fallbackSession: GameSession = {
+        id: `sess-${Date.now()}`,
+        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        gameType: 'matching',
+        gameTitle: t.gameMatch,
+        accuracy,
+        responseTimeMs,
+        errors: Math.max(0, finalMoves - 6),
+        level: 1,
+        score: Math.min(95, Math.max(30, accuracy)),
+        trend: accuracy >= 70 ? 'stable' : 'declining',
+        supportiveMessage: 'Saved safely on this device. Thank you for playing.',
+        synced: false,
+      };
+      setLatestAiFeedback({ score: fallbackSession.score, trend: fallbackSession.trend || 'stable', message: fallbackSession.supportiveMessage || '' });
       setIsSubmitting(false);
       setGameState('completed');
+      onSessionComplete(fallbackSession);
     }
   };
 

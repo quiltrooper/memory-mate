@@ -1,11 +1,23 @@
-import React, { useState } from 'react';
-import { Gamepad2, MessageSquareHeart, CheckSquare, Sparkles, Heart } from 'lucide-react';
+import React, { useMemo, useState } from 'react';
+import {
+  BrainCog,
+  CalendarDays,
+  CheckSquare,
+  ChevronRight,
+  Gamepad2,
+  Heart,
+  MessageSquareHeart,
+  Pill,
+  Sparkles,
+} from 'lucide-react';
 import { PatientProfile, Reminder, MemoryItem, KnownFace, GameSession, Language } from '../../types';
 import { CognitiveGames } from './games/CognitiveGames';
 import { MemoryAssistant } from './assistant/MemoryAssistant';
 import { DailyReminders } from './reminders/DailyReminders';
 import { DigitalMemoryBox } from './memorybox/DigitalMemoryBox';
 import { TRANSLATIONS } from '../../utils/translations';
+
+type PatientSection = 'home' | 'games' | 'assistant' | 'reminders' | 'memorybox';
 
 interface PatientModeProps {
   patientProfile: PatientProfile;
@@ -38,183 +50,155 @@ export const PatientMode: React.FC<PatientModeProps> = ({
   language,
   largeText,
 }) => {
-  const [activeTab, setActiveTab] = useState<'games' | 'assistant' | 'reminders' | 'memorybox'>('assistant');
+  const [activeSection, setActiveSection] = useState<PatientSection>('home');
   const t = TRANSLATIONS[language];
+  const completedReminders = reminders.filter((reminder) => reminder.completed).length;
+  const upcomingReminders = reminders.filter((reminder) => !reminder.completed).slice(0, 2);
+  const location = patientProfile.location.split('(')[0].trim();
 
-  const completedReminders = reminders.filter((r) => r.completed).length;
+  const today = useMemo(() => {
+    const locales: Record<Language, string> = { en: 'en-IN', as: 'as-IN', hi: 'hi-IN' };
+    return new Intl.DateTimeFormat(locales[language], {
+      weekday: 'long',
+      day: 'numeric',
+      month: 'long',
+    }).format(new Date());
+  }, [language]);
+
+  const copy = {
+    today: language === 'as' ? 'আজিৰ পৰিকল্পনা চাওক' : language === 'hi' ? 'आज की योजना देखें' : "See Today’s Plan",
+    next: language === 'as' ? 'তাৰ পিছত' : language === 'hi' ? 'आगे क्या है' : 'Coming up next',
+    activity: language === 'as' ? 'কাৰ্যকলাপ' : language === 'hi' ? 'गतिविधि' : 'Activity',
+    medicine: language === 'as' ? 'ঔষধৰ সোঁৱৰণী' : language === 'hi' ? 'दवा की याद दिलाना' : 'Medication reminder',
+    help: language === 'as' ? 'মোক সহায় লাগে' : language === 'hi' ? 'मुझे मदद चाहिए' : 'I need help',
+    quick: language === 'as' ? 'আপুনি কি কৰিব বিচাৰে?' : language === 'hi' ? 'आप क्या करना चाहेंगे?' : 'What would you like to do?',
+    saved: language === 'as' ? 'এই ডিভাইচত স্বয়ংক্ৰিয়ভাৱে সংৰক্ষিত' : language === 'hi' ? 'इस डिवाइस पर अपने-आप सहेजा गया' : 'Saved safely on this device',
+    noReminders: language === 'as' ? 'আজি আৰু কোনো সোঁৱৰণী নাই' : language === 'hi' ? 'आज कोई और रिमाइंडर नहीं है' : 'There are no more reminders for today.',
+  };
+
+  const selectSection = (section: PatientSection) => {
+    setActiveSection(section);
+    if (section !== 'home') {
+      window.setTimeout(() => document.getElementById('patient-main-view')?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 0);
+    }
+  };
+
+  const quickActions: Array<{
+    id: Exclude<PatientSection, 'home'>;
+    icon: React.ElementType;
+    title: string;
+    subtitle: string;
+  }> = [
+    { id: 'assistant', icon: MessageSquareHeart, title: t.tabAssistant, subtitle: t.tabAssistantSub },
+    { id: 'games', icon: Gamepad2, title: t.tabGames, subtitle: t.tabGamesSub },
+    { id: 'reminders', icon: CheckSquare, title: t.tabReminders, subtitle: `${completedReminders}/${reminders.length}` },
+    { id: 'memorybox', icon: Sparkles, title: t.tabMemoryBox, subtitle: `${memories.length} ${language === 'hi' ? 'यादें' : language === 'as' ? 'স্মৃতি' : 'memories'}` },
+  ];
 
   return (
-    <div id="patient-mode-container" className="space-y-6">
-      {/* Patient Welcome Banner */}
-      <div className="bg-white text-[#2D2E2E] rounded-2xl p-6 sm:p-8 border border-[#E5E1D8] shadow-xs relative overflow-hidden">
-        <div className="relative z-10 max-w-3xl">
-          <div className="inline-flex items-center gap-2 bg-[#F0F3EE] px-3.5 py-1.5 rounded-full text-xs sm:text-sm font-semibold mb-3 border border-[#D5DFD0] text-[#5C6E53]">
-            <Heart className="w-4 h-4 text-[#7C9070] fill-current" />
-            <span>{t.welcome}, {patientProfile.name} • {patientProfile.location.split('(')[0]}</span>
-          </div>
-
-          <h2
-            className={`font-bold tracking-tight text-[#2D2E2E] mb-2 ${
-              largeText ? 'text-3xl sm:text-4xl' : 'text-2xl sm:text-3xl'
-            }`}
-          >
-            {t.goodDay}, {patientProfile.name}!
-          </h2>
-
-          <p className="text-[#575551] text-base sm:text-lg leading-relaxed max-w-2xl font-normal">
-            {t.bannerSubtitle(
-              patientProfile.primaryCaregiver.split('(')[0].trim(),
-              patientProfile.ashaWorker.split('(')[0].trim()
-            )}
-          </p>
-
-          <div className="flex flex-wrap items-center gap-4 mt-4 pt-3 border-t border-[#E5E1D8] text-xs sm:text-sm text-[#73706A]">
-            <span>✓ {t.tasksDone(completedReminders, reminders.length)}</span>
-            <span>•</span>
-            <span>🧠 {t.exercisesDone(gameSessions.length)}</span>
-            <span>•</span>
-            <span>📸 {t.memoriesSaved(memories.length)}</span>
+    <div id="patient-mode-container" className="mx-auto max-w-3xl space-y-6 sm:space-y-8">
+      <section className="overflow-hidden rounded-[28px] border border-[#E8E2D9] bg-[#FAF6F0] shadow-[0_10px_30px_rgba(67,63,57,0.06)]">
+        <div className="border-b border-[#E8E2D9] px-5 py-4 sm:px-8">
+          <div className="flex items-center justify-between gap-3">
+            <div className="flex items-center gap-2 text-[#2D2D2D]">
+              <span className="flex h-7 w-7 items-center justify-center rounded-full bg-[#698A70] text-white"><Heart className="h-4 w-4 fill-current" /></span>
+              <span className="font-serif text-lg font-bold tracking-tight">Memory Mate</span>
+            </div>
+            <span className="text-xs font-semibold text-[#5C5C5C]">{copy.saved}</span>
           </div>
         </div>
 
-        {/* Decorative subtle background circle */}
-        <div className="absolute -right-16 -bottom-16 w-64 h-64 rounded-full bg-[#F0F3EE] blur-2xl pointer-events-none" />
-      </div>
-
-      {/* Primary Navigation Cards (Max 2 Taps to Anything) */}
-      <nav id="patient-primary-nav" aria-label="Patient navigation" className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
-        {/* Tab 1: Memory Assistant */}
-        <button
-          id="patient-nav-assistant"
-          type="button"
-          onClick={() => setActiveTab('assistant')}
-          className={`p-4 sm:p-5 rounded-2xl border transition-all flex flex-col items-start justify-between min-h-[110px] sm:min-h-[130px] text-left shadow-xs ${
-            activeTab === 'assistant'
-              ? 'bg-[#F0F3EE] border-[#7C9070] ring-1 ring-[#7C9070]'
-              : 'bg-white border-[#E5E1D8] hover:border-[#7C9070]/60'
-          }`}
-        >
-          <div
-            className={`w-10 h-10 rounded-xl flex items-center justify-center mb-2 transition-colors ${
-              activeTab === 'assistant' ? 'bg-[#7C9070] text-white' : 'bg-[#F0F3EE] text-[#5C6E53]'
-            }`}
-          >
-            <MessageSquareHeart className="w-5 h-5" />
+        <div className="space-y-6 px-5 py-7 sm:px-8 sm:py-9">
+          <div className="space-y-2">
+            <div className="flex items-center gap-2 text-[#2D2D2D]">
+              <span className="text-2xl" aria-hidden="true">☀</span>
+              <h2 className={`font-serif font-semibold tracking-tight ${largeText ? 'text-4xl sm:text-5xl' : 'text-3xl sm:text-4xl'}`}>
+                {language === 'as' ? `সুপ্ৰভাত, ${patientProfile.name}` : language === 'hi' ? `सुप्रभात, ${patientProfile.name}` : `Good morning, ${patientProfile.name}`}
+              </h2>
+            </div>
+            <p className="text-lg font-semibold text-[#2D2D2D]">{today}</p>
+            <p className="text-base text-[#5C5C5C]">{location}</p>
           </div>
-          <div>
-            <span
-              className={`font-bold block text-[#2D2E2E] ${
-                largeText ? 'text-lg sm:text-xl' : 'text-base sm:text-lg'
+
+          <button
+            id="patient-today-plan"
+            type="button"
+            onClick={() => selectSection('reminders')}
+            className="flex min-h-[72px] w-full items-center justify-between gap-4 rounded-[20px] bg-[#698A70] px-5 text-left text-white transition-colors hover:bg-[#58745E] focus:outline-none focus:ring-4 focus:ring-[#C9D9C7]"
+          >
+            <span className="flex items-center gap-3">
+              <CalendarDays className="h-6 w-6 shrink-0" aria-hidden="true" />
+              <span className="text-xl font-bold">{copy.today}</span>
+            </span>
+            <ChevronRight className="h-6 w-6 shrink-0" aria-hidden="true" />
+          </button>
+
+          <div className="space-y-3">
+            <h3 className="font-serif text-2xl font-semibold text-[#2D2D2D]">{copy.next}</h3>
+            {upcomingReminders.length > 0 ? upcomingReminders.map((reminder) => {
+              const isMedication = reminder.category === 'medication';
+              return (
+                <button
+                  key={reminder.id}
+                  type="button"
+                  onClick={() => selectSection(isMedication ? 'reminders' : 'games')}
+                  className="flex min-h-[104px] w-full items-center gap-4 rounded-[20px] border border-[#E8E2D9] bg-white p-5 text-left shadow-[0_2px_4px_rgba(67,63,57,0.03)] transition-colors hover:border-[#B9CDB8] focus:outline-none focus:ring-4 focus:ring-[#DDE9DB]"
+                >
+                  <span className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl ${isMedication ? 'bg-[#FDF1EF] text-[#B85F54]' : 'bg-[#EDF2EE] text-[#58745E]'}`}>
+                    {isMedication ? <Pill className="h-6 w-6" /> : <BrainCog className="h-6 w-6" />}
+                  </span>
+                  <span className="min-w-0 space-y-1">
+                    <span className="block text-xs font-bold uppercase tracking-wide text-[#5C5C5C]">{isMedication ? copy.medicine : copy.activity}</span>
+                    <span className="block text-lg font-bold text-[#2D2D2D]">{reminder.title}</span>
+                    <span className="block text-base text-[#5C5C5C]">{reminder.time}{reminder.notes ? ` • ${reminder.notes}` : ''}</span>
+                  </span>
+                </button>
+              );
+            }) : (
+              <div className="rounded-[20px] border border-dashed border-[#D7D0C6] bg-white px-5 py-6 text-base text-[#5C5C5C]">{copy.noReminders}</div>
+            )}
+          </div>
+        </div>
+      </section>
+
+      <section className="space-y-3" aria-label="Patient actions">
+        <h3 className="px-1 font-serif text-2xl font-semibold text-[#2D2D2D]">{copy.quick}</h3>
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+          {quickActions.map(({ id, icon: Icon, title, subtitle }) => (
+            <button
+              key={id}
+              id={`patient-nav-${id}`}
+              type="button"
+              onClick={() => selectSection(id)}
+              className={`flex min-h-[92px] items-center gap-4 rounded-[20px] border p-5 text-left transition-all focus:outline-none focus:ring-4 focus:ring-[#DDE9DB] ${
+                activeSection === id ? 'border-[#698A70] bg-[#EDF2EE] shadow-[0_4px_12px_rgba(67,63,57,0.06)]' : 'border-[#E8E2D9] bg-white hover:border-[#B9CDB8]'
               }`}
             >
-              {t.tabAssistant}
-            </span>
-            <span className="text-xs text-[#73706A] font-normal">
-              {t.tabAssistantSub}
-            </span>
-          </div>
-        </button>
+              <span className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl ${activeSection === id ? 'bg-[#698A70] text-white' : 'bg-[#EDF2EE] text-[#58745E]'}`}>
+                <Icon className="h-5 w-5" aria-hidden="true" />
+              </span>
+              <span className="min-w-0">
+                <span className="block text-lg font-bold text-[#2D2D2D]">{title}</span>
+                <span className="block text-sm text-[#5C5C5C]">{subtitle}</span>
+              </span>
+              <ChevronRight className="ml-auto h-5 w-5 shrink-0 text-[#698A70]" aria-hidden="true" />
+            </button>
+          ))}
+        </div>
+      </section>
 
-        {/* Tab 2: Cognitive Games */}
-        <button
-          id="patient-nav-games"
-          type="button"
-          onClick={() => setActiveTab('games')}
-          className={`p-4 sm:p-5 rounded-2xl border transition-all flex flex-col items-start justify-between min-h-[110px] sm:min-h-[130px] text-left shadow-xs ${
-            activeTab === 'games'
-              ? 'bg-[#F0F3EE] border-[#7C9070] ring-1 ring-[#7C9070]'
-              : 'bg-white border-[#E5E1D8] hover:border-[#7C9070]/60'
-          }`}
-        >
-          <div
-            className={`w-10 h-10 rounded-xl flex items-center justify-center mb-2 transition-colors ${
-              activeTab === 'games' ? 'bg-[#7C9070] text-white' : 'bg-[#F0F3EE] text-[#5C6E53]'
-            }`}
-          >
-            <Gamepad2 className="w-5 h-5" />
-          </div>
-          <div>
-            <span
-              className={`font-bold block text-[#2D2E2E] ${
-                largeText ? 'text-lg sm:text-xl' : 'text-base sm:text-lg'
-              }`}
-            >
-              {t.tabGames}
-            </span>
-            <span className="text-xs text-[#73706A] font-normal">
-              {t.tabGamesSub}
-            </span>
-          </div>
-        </button>
+      <button
+        id="patient-help-button"
+        type="button"
+        onClick={() => selectSection('assistant')}
+        className="flex min-h-[64px] w-full items-center justify-center gap-3 rounded-[20px] bg-[#D97365] px-6 text-lg font-bold text-white transition-colors hover:bg-[#C76557] focus:outline-none focus:ring-4 focus:ring-[#F0C7C0]"
+      >
+        <MessageSquareHeart className="h-6 w-6" aria-hidden="true" />
+        {copy.help}
+      </button>
 
-        {/* Tab 3: Daily Routine */}
-        <button
-          id="patient-nav-reminders"
-          type="button"
-          onClick={() => setActiveTab('reminders')}
-          className={`p-4 sm:p-5 rounded-2xl border transition-all flex flex-col items-start justify-between min-h-[110px] sm:min-h-[130px] text-left shadow-xs ${
-            activeTab === 'reminders'
-              ? 'bg-[#F0F3EE] border-[#7C9070] ring-1 ring-[#7C9070]'
-              : 'bg-white border-[#E5E1D8] hover:border-[#7C9070]/60'
-          }`}
-        >
-          <div
-            className={`w-10 h-10 rounded-xl flex items-center justify-center mb-2 transition-colors ${
-              activeTab === 'reminders' ? 'bg-[#7C9070] text-white' : 'bg-[#F0F3EE] text-[#5C6E53]'
-            }`}
-          >
-            <CheckSquare className="w-5 h-5" />
-          </div>
-          <div>
-            <span
-              className={`font-bold block text-[#2D2E2E] ${
-                largeText ? 'text-lg sm:text-xl' : 'text-base sm:text-lg'
-              }`}
-            >
-              {t.tabReminders}
-            </span>
-            <span className="text-xs text-[#73706A] font-normal">
-              {t.tabRemindersSub} ({completedReminders}/{reminders.length})
-            </span>
-          </div>
-        </button>
-
-        {/* Tab 4: Digital Memory Box */}
-        <button
-          id="patient-nav-memorybox"
-          type="button"
-          onClick={() => setActiveTab('memorybox')}
-          className={`p-4 sm:p-5 rounded-2xl border transition-all flex flex-col items-start justify-between min-h-[110px] sm:min-h-[130px] text-left shadow-xs ${
-            activeTab === 'memorybox'
-              ? 'bg-[#F0F3EE] border-[#7C9070] ring-1 ring-[#7C9070]'
-              : 'bg-white border-[#E5E1D8] hover:border-[#7C9070]/60'
-          }`}
-        >
-          <div
-            className={`w-10 h-10 rounded-xl flex items-center justify-center mb-2 transition-colors ${
-              activeTab === 'memorybox' ? 'bg-[#7C9070] text-white' : 'bg-[#F0F3EE] text-[#5C6E53]'
-            }`}
-          >
-            <Sparkles className="w-5 h-5" />
-          </div>
-          <div>
-            <span
-              className={`font-bold block text-[#2D2E2E] ${
-                largeText ? 'text-lg sm:text-xl' : 'text-base sm:text-lg'
-              }`}
-            >
-              {t.tabMemoryBox}
-            </span>
-            <span className="text-xs text-[#73706A] font-normal">
-              {t.tabMemoryBoxSub} ({memories.length})
-            </span>
-          </div>
-        </button>
-      </nav>
-
-      {/* Render Selected View */}
-      <main id="patient-main-view">
-        {activeTab === 'assistant' && (
+      <main id="patient-main-view" className="scroll-mt-32">
+        {activeSection === 'assistant' && (
           <MemoryAssistant
             patientProfile={patientProfile}
             reminders={reminders}
@@ -225,7 +209,7 @@ export const PatientMode: React.FC<PatientModeProps> = ({
           />
         )}
 
-        {activeTab === 'games' && (
+        {activeSection === 'games' && (
           <CognitiveGames
             onSessionComplete={onSessionComplete}
             sessions={gameSessions}
@@ -234,7 +218,7 @@ export const PatientMode: React.FC<PatientModeProps> = ({
           />
         )}
 
-        {activeTab === 'reminders' && (
+        {activeSection === 'reminders' && (
           <DailyReminders
             reminders={reminders}
             onToggleReminder={onToggleReminder}
@@ -244,7 +228,7 @@ export const PatientMode: React.FC<PatientModeProps> = ({
           />
         )}
 
-        {activeTab === 'memorybox' && (
+        {activeSection === 'memorybox' && (
           <DigitalMemoryBox
             memories={memories}
             onAddMemory={onAddMemory}

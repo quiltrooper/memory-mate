@@ -1,0 +1,13 @@
+{
+  "name": "Memory Mate",
+  "short_name": "Memory Mate",
+  "description": "A gentle cognitive care and memory-assistance companion for elderly people and their caregivers.",
+  "id": "/",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#FAF9F6",
+  "theme_color": "#7C9070",
+  "orientation": "any",
+  "icons": [{"src": "/memory-mate.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable"}]
+}

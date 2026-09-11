@@ -1,15 +1,15 @@
 @import "tailwindcss";
 
 @theme {
-  --color-canvas: #FAF9F6;
-  --color-charcoal: #2D2E2E;
-  --color-sage: #7C9070;
-  --color-sage-hover: #687A5E;
-  --color-sage-dark: #53624B;
-  --color-sage-light: #F0F3EE;
+  --color-canvas: #FAF6F0;
+  --color-charcoal: #2D2D2D;
+  --color-sage: #698A70;
+  --color-sage-hover: #58745E;
+  --color-sage-dark: #405A47;
+  --color-sage-light: #EDF2EE;
   --color-sage-border: #D5DFD0;
-  --color-border-clean: #E5E1D8;
-  --color-border-muted: #EFECE6;
+  --color-border-clean: #E8E2D9;
+  --color-border-muted: #F1ECE5;
 
   /* Harmonize theme colors with Clean Minimalism palette */
   --color-emerald-50: #F3F6F2;
@@ -47,14 +47,22 @@
 
 @layer base {
   body {
-    font-family: 'Plus Jakarta Sans', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
-    color: #2D2E2E;
-    background-color: #FAF9F6;
+    font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    color: #2D2D2D;
+    background-color: #FAF6F0;
     -webkit-font-smoothing: antialiased;
   }
 
   input, textarea, select, button {
     font-family: inherit;
   }
-}
 
+  button, select, input, textarea {
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  button:focus-visible, select:focus-visible, input:focus-visible, textarea:focus-visible {
+    outline: 3px solid #B9CDB8;
+    outline-offset: 3px;
+  }
+}

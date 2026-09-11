@@ -1,5 +1,17 @@
-import React from 'react';
-import { HeartHandshake, User, ShieldCheck, Wifi, WifiOff, Globe, Sparkles, Users } from 'lucide-react';
+import React, { useRef } from 'react';
+import {
+  Download,
+  Globe,
+  HeartHandshake,
+  Save,
+  Settings2,
+  ShieldCheck,
+  Upload,
+  User,
+  Users,
+  Wifi,
+  WifiOff,
+} from 'lucide-react';
 import { Language, PatientDataset } from '../types';
 import { TRANSLATIONS } from '../utils/translations';
 
@@ -17,6 +29,10 @@ interface HeaderProps {
   patients: PatientDataset[];
   activePatientId: string;
   onSelectPatient: (id: string) => void;
+  canInstall: boolean;
+  onInstall: () => void;
+  onExportBackup: () => void;
+  onRestoreBackup: (file: File) => void;
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -33,203 +49,142 @@ export const Header: React.FC<HeaderProps> = ({
   patients,
   activePatientId,
   onSelectPatient,
+  canInstall,
+  onInstall,
+  onExportBackup,
+  onRestoreBackup,
 }) => {
+  const backupInputRef = useRef<HTMLInputElement>(null);
   const t = TRANSLATIONS[language];
-  const activePatient = patients.find((p) => p.profile.id === activePatientId) || patients[0];
 
   return (
-    <header id="app-header" className="bg-[#FAF9F6]/95 backdrop-blur-xs border-b border-[#E5E1D8] sticky top-0 z-40">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 py-3">
-        <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-3">
-          
-          {/* Logo & Subtitle */}
-          <div className="flex items-center justify-between">
-            <div className="flex items-center space-x-3">
-              <div className="w-10 h-10 rounded-xl bg-[#7C9070] flex items-center justify-center text-white ring-2 ring-[#E5E1D8]">
-                <HeartHandshake className="w-5 h-5" />
-              </div>
-              <div>
-                <div className="flex items-center gap-2">
-                  <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-[#2D2E2E]">
-                    {t.appName}
-                  </h1>
-                  <span className="hidden sm:inline-block px-2.5 py-0.5 rounded-full text-xs font-medium bg-[#F0F3EE] text-[#5C6E53] border border-[#D5DFD0]">
-                    {t.regionalTag}
-                  </span>
-                </div>
-                <p className="text-xs sm:text-sm text-[#73706A] font-normal">
-                  {t.tagline}
-                </p>
-              </div>
+    <header id="app-header" className="sticky top-0 z-40 border-b border-[#E8E2D9] bg-[#FAF6F0]/95 backdrop-blur-md">
+      <div className="mx-auto max-w-7xl px-4 py-3 sm:px-6">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="flex min-w-fit items-center gap-3">
+            <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-[#698A70] text-white shadow-[0_3px_10px_rgba(67,63,57,0.12)]">
+              <HeartHandshake className="h-6 w-6" aria-hidden="true" />
             </div>
-
-            {/* Mobile offline badge */}
-            <div className="lg:hidden flex items-center gap-1.5">
-              <button
-                id="mobile-offline-btn"
-                type="button"
-                onClick={onToggleOffline}
-                className={`px-2.5 py-1 text-xs font-semibold rounded-lg flex items-center gap-1 border transition-colors ${
-                  offlineMode
-                    ? 'bg-[#FDF6ED] text-[#8C5E28] border-[#E8D4BE]'
-                    : 'bg-[#F0F3EE] text-[#5C6E53] border-[#D5DFD0]'
-                }`}
-              >
-                {offlineMode ? <WifiOff className="w-3.5 h-3.5" /> : <Wifi className="w-3.5 h-3.5" />}
-                <span>{offlineMode ? t.offlineMode.split(' ')[0] : t.cloudConnected.split(' ')[0]}</span>
-              </button>
+            <div>
+              <div className="flex items-center gap-2">
+                <h1 className="font-serif text-2xl font-bold tracking-tight text-[#2D2D2D]">{t.appName}</h1>
+                <span className="hidden rounded-full border border-[#D5DFD0] bg-[#EDF2EE] px-2 py-0.5 text-[11px] font-bold text-[#58745E] sm:inline">NER</span>
+              </div>
+              <p className="hidden text-sm text-[#5C5C5C] sm:block">{t.tagline}</p>
             </div>
           </div>
 
-          {/* Controls: Patient Switcher, Mode Switcher & Language */}
-          <div className="flex flex-wrap items-center gap-2 sm:gap-3">
-            
-            {/* Patient Profile Switcher */}
-            <div className="flex items-center gap-1.5 bg-[#FFFFFF] border border-[#E5E1D8] px-2.5 py-1.5 rounded-xl shadow-2xs">
-              <Users className="w-4 h-4 text-[#7C9070]" />
-              <label htmlFor="patient-selector" className="sr-only">
-                {t.patientSelector}
-              </label>
+          <div className="flex flex-1 flex-wrap items-center justify-end gap-2 sm:gap-3">
+            <label className="sr-only" htmlFor="patient-selector">{t.patientSelector}</label>
+            <div className="flex max-w-full items-center gap-2 rounded-xl border border-[#E8E2D9] bg-white px-3 py-2 shadow-[0_1px_2px_rgba(67,63,57,0.04)]">
+              <Users className="h-4 w-4 shrink-0 text-[#698A70]" aria-hidden="true" />
               <select
                 id="patient-selector"
                 value={activePatientId}
-                onChange={(e) => onSelectPatient(e.target.value)}
+                onChange={(event) => onSelectPatient(event.target.value)}
                 aria-label={t.patientSelector}
-                className="bg-transparent text-xs sm:text-sm font-semibold text-[#2D2E2E] outline-none cursor-pointer pr-1"
+                className="max-w-[160px] bg-transparent text-sm font-semibold text-[#2D2D2D] outline-none sm:max-w-[280px]"
               >
-                {patients.map((p) => (
-                  <option key={p.profile.id} value={p.profile.id} className="text-[#2D2E2E] py-1">
-                    {p.profile.name} ({p.profile.age}y • {p.profile.location.split(',')[0]})
+                {patients.map((patient) => (
+                  <option key={patient.profile.id} value={patient.profile.id}>
+                    {patient.profile.name} ({patient.profile.age}y • {patient.profile.location.split(',')[0]})
                   </option>
                 ))}
               </select>
             </div>
 
-            {/* View Switcher (Patient vs Caregiver) */}
-            <div className="bg-[#EFECE6] p-1 rounded-xl flex items-center border border-[#E5E1D8]">
+            <div className="flex rounded-xl border border-[#E8E2D9] bg-[#E8E2D9] p-1" aria-label="Choose view">
               <button
                 id="btn-patient-mode"
                 type="button"
                 onClick={() => onViewChange('patient')}
-                className={`px-3 sm:px-3.5 py-1.5 rounded-lg text-xs sm:text-sm font-semibold flex items-center gap-1.5 transition-all ${
-                  currentView === 'patient'
-                    ? 'bg-[#7C9070] text-white shadow-xs'
-                    : 'text-[#2D2E2E] hover:bg-[#E5E1D8]/60'
-                }`}
+                className={`flex min-h-9 items-center gap-1.5 rounded-lg px-3 text-sm font-bold transition-colors ${currentView === 'patient' ? 'bg-[#698A70] text-white shadow-sm' : 'text-[#2D2D2D] hover:bg-white/70'}`}
               >
-                <User className="w-4 h-4" />
-                <span>{t.patientMode}</span>
+                <User className="h-4 w-4" aria-hidden="true" />
+                <span className="hidden md:inline">{t.patientMode}</span>
+                <span className="md:hidden">Patient</span>
               </button>
-
               <button
                 id="btn-caregiver-mode"
                 type="button"
                 onClick={() => onViewChange('caregiver')}
-                className={`px-3 sm:px-3.5 py-1.5 rounded-lg text-xs sm:text-sm font-semibold flex items-center gap-1.5 transition-all ${
-                  currentView === 'caregiver'
-                    ? 'bg-[#5C6E53] text-white shadow-xs'
-                    : 'text-[#2D2E2E] hover:bg-[#E5E1D8]/60'
-                }`}
+                className={`flex min-h-9 items-center gap-1.5 rounded-lg px-3 text-sm font-bold transition-colors ${currentView === 'caregiver' ? 'bg-[#58745E] text-white shadow-sm' : 'text-[#2D2D2D] hover:bg-white/70'}`}
               >
-                <ShieldCheck className="w-4 h-4" />
-                <span>{t.caregiverDashboard}</span>
+                <ShieldCheck className="h-4 w-4" aria-hidden="true" />
+                <span className="hidden md:inline">{t.caregiverDashboard}</span>
+                <span className="md:hidden">Care</span>
               </button>
             </div>
 
-            {/* Offline Simulator Switch */}
-            <div className="hidden lg:flex items-center gap-2">
-              <button
-                id="desktop-toggle-offline"
-                type="button"
-                onClick={onToggleOffline}
-                title="Toggle offline mode simulation"
-                className={`px-3 py-1.5 text-xs font-semibold rounded-lg flex items-center gap-1.5 border transition-all ${
-                  offlineMode
-                    ? 'bg-[#FDF6ED] text-[#8C5E28] border-[#E8D4BE] shadow-xs'
-                    : 'bg-[#FFFFFF] text-[#2D2E2E] border-[#E5E1D8] hover:bg-[#F5F3EF]'
-                }`}
-              >
-                {offlineMode ? (
-                  <>
-                    <WifiOff className="w-3.5 h-3.5 text-[#8C5E28] animate-pulse" />
-                    <span>{t.offlineMode}</span>
-                  </>
-                ) : (
-                  <>
-                    <Wifi className="w-3.5 h-3.5 text-[#7C9070]" />
-                    <span>{t.cloudConnected}</span>
-                  </>
-                )}
-              </button>
-
-              {queuedCount > 0 && (
+            <div className="flex items-center rounded-xl border border-[#E8E2D9] bg-[#E8E2D9] p-1 text-sm" aria-label="Language">
+              <Globe className="ml-1.5 h-4 w-4 text-[#5C5C5C]" aria-hidden="true" />
+              {([
+                ['en', 'EN'],
+                ['as', 'অ'],
+                ['hi', 'हि'],
+              ] as const).map(([code, label]) => (
                 <button
-                  id="header-sync-btn"
+                  key={code}
+                  id={`lang-${code}`}
                   type="button"
-                  onClick={onSync}
-                  className="px-3 py-1.5 text-xs font-semibold rounded-lg bg-[#7C9070] text-white hover:bg-[#687A5E] flex items-center gap-1.5 shadow-xs"
+                  onClick={() => onLanguageChange(code)}
+                  className={`min-h-8 rounded-lg px-2 font-bold transition-colors ${language === code ? 'bg-white text-[#2D2D2D] shadow-sm' : 'text-[#5C5C5C] hover:text-[#2D2D2D]'}`}
                 >
-                  <Sparkles className="w-3.5 h-3.5" />
-                  <span>{t.sync} ({queuedCount})</span>
+                  {label}
                 </button>
-              )}
+              ))}
             </div>
 
-            {/* Font Size Toggle for Elderly Eyes */}
-            <button
-              id="font-size-toggle"
-              type="button"
-              onClick={onToggleLargeText}
-              title="Toggle Extra Large Text"
-              className={`px-2.5 py-1.5 text-xs font-bold rounded-lg border transition-colors ${
-                largeText
-                  ? 'bg-[#2D2E2E] text-white border-[#2D2E2E]'
-                  : 'bg-[#FFFFFF] text-[#2D2E2E] border-[#E5E1D8] hover:bg-[#F5F3EF]'
-              }`}
-            >
-              Aa+
-            </button>
-
-            {/* Language Selector */}
-            <div className="flex items-center space-x-1 bg-[#EFECE6] border border-[#E5E1D8] rounded-lg p-0.5 text-xs font-medium">
-              <Globe className="w-3.5 h-3.5 text-[#73706A] ml-1.5" />
-              <button
-                id="lang-en"
-                type="button"
-                onClick={() => onLanguageChange('en')}
-                title="English"
-                className={`px-2 py-1 rounded-md font-semibold transition-colors ${
-                  language === 'en' ? 'bg-[#FFFFFF] text-[#2D2E2E] shadow-xs' : 'text-[#73706A] hover:text-[#2D2E2E]'
-                }`}
-              >
-                English
-              </button>
-              <button
-                id="lang-as"
-                type="button"
-                onClick={() => onLanguageChange('as')}
-                title="Assamese (অসমীয়া)"
-                className={`px-2 py-1 rounded-md font-semibold transition-colors ${
-                  language === 'as' ? 'bg-[#FFFFFF] text-[#2D2E2E] shadow-xs' : 'text-[#73706A] hover:text-[#2D2E2E]'
-                }`}
-              >
-                অসমীয়া
-              </button>
-              <button
-                id="lang-hi"
-                type="button"
-                onClick={() => onLanguageChange('hi')}
-                title="Hindi (हिंदी)"
-                className={`px-2 py-1 rounded-md font-semibold transition-colors ${
-                  language === 'hi' ? 'bg-[#FFFFFF] text-[#2D2E2E] shadow-xs' : 'text-[#73706A] hover:text-[#2D2E2E]'
-                }`}
-              >
-                हिन्दी
-              </button>
-            </div>
-
+            <details className="group relative">
+              <summary className="flex min-h-10 cursor-pointer list-none items-center gap-2 rounded-xl border border-[#D5DFD0] bg-[#EDF2EE] px-3 text-sm font-bold text-[#58745E] transition-colors hover:bg-[#E1EADF] [&::-webkit-details-marker]:hidden">
+                <Settings2 className="h-4 w-4" aria-hidden="true" />
+                <span className="hidden sm:inline">Options</span>
+              </summary>
+              <div className="absolute right-0 top-[calc(100%+8px)] z-50 w-72 space-y-2 rounded-2xl border border-[#E8E2D9] bg-white p-3 shadow-[0_16px_40px_rgba(67,63,57,0.16)]">
+                <button
+                  id="toggle-offline"
+                  type="button"
+                  onClick={onToggleOffline}
+                  className={`flex min-h-11 w-full items-center justify-between rounded-xl border px-3 text-left text-sm font-semibold ${offlineMode ? 'border-[#E8D4BE] bg-[#FDF6ED] text-[#8C5E28]' : 'border-[#D5DFD0] bg-[#EDF2EE] text-[#58745E]'}`}
+                >
+                  <span className="flex items-center gap-2">{offlineMode ? <WifiOff className="h-4 w-4" /> : <Wifi className="h-4 w-4" />}{offlineMode ? t.offlineMode : t.cloudConnected}</span>
+                  <span className="text-xs">{offlineMode ? 'Simulated' : 'Connected'}</span>
+                </button>
+                {queuedCount > 0 && (
+                  <button id="header-sync-btn" type="button" onClick={onSync} className="min-h-11 w-full rounded-xl bg-[#698A70] px-3 text-sm font-bold text-white hover:bg-[#58745E]">
+                    {t.sync} ({queuedCount})
+                  </button>
+                )}
+                {canInstall && (
+                  <button id="install-app" type="button" onClick={onInstall} className="flex min-h-11 w-full items-center gap-2 rounded-xl border border-[#D5DFD0] px-3 text-sm font-bold text-[#58745E] hover:bg-[#EDF2EE]">
+                    <Download className="h-4 w-4" /> Install Memory Mate
+                  </button>
+                )}
+                <div className="grid grid-cols-2 gap-2">
+                  <button type="button" onClick={onExportBackup} className="flex min-h-11 items-center justify-center gap-1 rounded-xl border border-[#E8E2D9] text-xs font-bold text-[#2D2D2D] hover:bg-[#FAF6F0]">
+                    <Save className="h-4 w-4" /> Backup
+                  </button>
+                  <button type="button" onClick={() => backupInputRef.current?.click()} className="flex min-h-11 items-center justify-center gap-1 rounded-xl border border-[#E8E2D9] text-xs font-bold text-[#2D2D2D] hover:bg-[#FAF6F0]">
+                    <Upload className="h-4 w-4" /> Restore
+                  </button>
+                </div>
+                <button type="button" onClick={onToggleLargeText} className={`min-h-10 w-full rounded-xl text-sm font-bold ${largeText ? 'bg-[#2D2D2D] text-white' : 'bg-[#FAF6F0] text-[#2D2D2D]'}`}>
+                  {largeText ? 'Use regular text' : 'Use larger text'}
+                </button>
+              </div>
+            </details>
+            <input
+              ref={backupInputRef}
+              type="file"
+              accept="application/json,.json"
+              className="hidden"
+              onChange={(event) => {
+                const file = event.target.files?.[0];
+                if (file) onRestoreBackup(file);
+                event.target.value = '';
+              }}
+            />
           </div>
-
         </div>
       </div>
     </header>

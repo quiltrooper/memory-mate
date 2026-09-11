@@ -240,8 +240,24 @@ export const PatternRecallGame: React.FC<PatternRecallGameProps> = ({
       speakText(data.supportiveMessage, language);
     } catch (err) {
       console.error(err);
+      const fallbackSession: GameSession = {
+        id: `sess-${Date.now()}`,
+        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        gameType: 'pattern',
+        gameTitle: t.gamePattern,
+        accuracy,
+        responseTimeMs,
+        errors: totalErrors,
+        level: sequenceLength,
+        score: Math.min(95, Math.max(30, accuracy - totalErrors * 5)),
+        trend: accuracy >= 70 ? 'stable' : 'declining',
+        supportiveMessage: 'Saved safely on this device. Your effort today matters.',
+        synced: false,
+      };
+      setLatestAiFeedback({ score: fallbackSession.score, trend: fallbackSession.trend, message: fallbackSession.supportiveMessage });
       setIsSubmitting(false);
       setGameState('completed');
+      onSessionComplete(fallbackSession);
     }
   };
 

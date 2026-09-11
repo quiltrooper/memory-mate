@@ -3,6 +3,7 @@ import { Header } from './components/Header';
 import { OfflineSyncBanner } from './components/OfflineSyncBanner';
 import { PatientMode } from './components/patient/PatientMode';
 import { CaregiverDashboard } from './components/caregiver/CaregiverDashboard';
+import { PinLock } from './components/PinLock';
 import {
   PatientProfile,
   Reminder,
@@ -14,18 +15,131 @@ import {
   PatientDataset,
 } from './types';
 import { INITIAL_PATIENTS, ALL_PATIENTS } from './data/initialData';
+import { addDemoFamilyFaces } from './data/demoFamilyFaces';
 import { speakText } from './utils/speech';
 
+interface BeforeInstallPromptEvent extends Event {
+  prompt: () => Promise<void>;
+  userChoice: Promise<{ outcome: 'accepted' | 'dismissed'; platform: string }>;
+}
+
 export default function App() {
+  const [isUnlocked, setIsUnlocked] = useState(false);
   const [currentView, setCurrentView] = useState<'patient' | 'caregiver'>('patient');
   const [offlineMode, setOfflineMode] = useState<boolean>(false);
+  const [isOnline, setIsOnline] = useState(() => navigator.onLine);
   const [language, setLanguage] = useState<Language>('en');
   const [largeText, setLargeText] = useState<boolean>(false);
+  const [installPrompt, setInstallPrompt] = useState<BeforeInstallPromptEvent | null>(null);
+
+  useEffect(() => {
+    const onBeforeInstallPrompt = (event: Event) => {
+      event.preventDefault();
+      setInstallPrompt(event as BeforeInstallPromptEvent);
+    };
+
+    const onAppInstalled = () => setInstallPrompt(null);
+
+    window.addEventListener('beforeinstallprompt', onBeforeInstallPrompt);
+    window.addEventListener('appinstalled', onAppInstalled);
+    return () => {
+      window.removeEventListener('beforeinstallprompt', onBeforeInstallPrompt);
+      window.removeEventListener('appinstalled', onAppInstalled);
+    };
+  }, []);
+
+  useEffect(() => {
+    const markOnline = () => setIsOnline(true);
+    const markOffline = () => setIsOnline(false);
+    window.addEventListener('online', markOnline);
+    window.addEventListener('offline', markOffline);
+    return () => {
+      window.removeEventListener('online', markOnline);
+      window.removeEventListener('offline', markOffline);
+    };
+  }, []);
+
+  const handleInstall = async () => {
+    if (!installPrompt) return;
+    await installPrompt.prompt();
+    const { outcome } = await installPrompt.userChoice;
+    if (outcome === 'accepted') setInstallPrompt(null);
+  };
+
+  const handleExportBackup = () => {
+    const backup = {
+      format: 'memory-mate-backup',
+      version: 1,
+      exportedAt: new Date().toISOString(),
+      activePatientId,
+      patients,
+    };
+    const url = URL.createObjectURL(new Blob([JSON.stringify(backup, null, 2)], { type: 'application/json' }));
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `memory-mate-backup-${new Date().toISOString().slice(0, 10)}.json`;
+    link.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const handleRestoreBackup = async (file: File) => {
+    try {
+      const backup = JSON.parse(await file.text()) as { format?: string; activePatientId?: string; patients?: PatientDataset[] };
+      if (backup.format !== 'memory-mate-backup' || !Array.isArray(backup.patients) || backup.patients.some((patient) => !patient?.profile?.id)) {
+        throw new Error('invalid backup');
+      }
+      if (!window.confirm('Restore this backup? It will replace the current patient data stored on this device.')) return;
+      const nextActiveId = backup.patients.some((patient) => patient.profile.id === backup.activePatientId)
+        ? backup.activePatientId!
+        : backup.patients[0]?.profile.id;
+      const nextActivePatient = backup.patients.find((patient) => patient.profile.id === nextActiveId);
+      setPatients(backup.patients);
+      localStorage.setItem('mm_patient_datasets', JSON.stringify(backup.patients));
+      if (nextActivePatient && nextActiveId) {
+        setActivePatientId(nextActiveId);
+        localStorage.setItem('mm_active_patient_id', nextActiveId);
+        setPatientProfile(nextActivePatient.profile);
+        setReminders(nextActivePatient.reminders);
+        setMemories(nextActivePatient.memories);
+        setKnownFaces(nextActivePatient.knownFaces);
+        setTrendData(nextActivePatient.trendData);
+        setGameSessions(nextActivePatient.gameSessions);
+      }
+    } catch {
+      window.alert('This file is not a valid Memory Mate backup. Choose a backup created by this app.');
+    }
+  };
 
   // Multi-patient datasets state
   const [patients, setPatients] = useState<PatientDataset[]>(() => {
     const saved = localStorage.getItem('mm_patient_datasets');
-    return saved ? JSON.parse(saved) : ALL_PATIENTS;
+    if (!saved) return ALL_PATIENTS;
+
+    try {
+      const savedPatients = JSON.parse(saved) as PatientDataset[];
+      if (!Array.isArray(savedPatients)) return ALL_PATIENTS;
+
+      // Older versions stored only the three demonstration profiles in the
+      // browser. Merge those locally edited profiles into the complete
+      // bundled dataset instead of hiding the 100 generated profiles.
+      const savedById = new Map(
+        savedPatients
+          .filter((patient) => patient?.profile?.id)
+          .map((patient) => [patient.profile.id, patient]),
+      );
+      const bundledIds = new Set(ALL_PATIENTS.map((patient) => patient.profile.id));
+      const mergedPatients = ALL_PATIENTS.map(
+        (patient) => savedById.get(patient.profile.id) ?? patient,
+      );
+
+      // Preserve patients manually added by a caregiver as well.
+      return addDemoFamilyFaces([
+        ...mergedPatients,
+        ...savedPatients.filter((patient) => !bundledIds.has(patient?.profile?.id)),
+      ], bundledIds);
+    } catch {
+      return ALL_PATIENTS;
+    }
   });
 
   const [activePatientId, setActivePatientId] = useState<string>(() => {
@@ -69,7 +183,16 @@ export default function App() {
       localStorage.setItem('mm_patient_datasets', JSON.stringify(updated));
       return updated;
     });
-    handleSelectPatient(newDataset.profile.id);
+    // Select the new record directly. The state update above is asynchronous,
+    // so looking it up through handleSelectPatient could still see the old list.
+    setActivePatientId(newDataset.profile.id);
+    localStorage.setItem('mm_active_patient_id', newDataset.profile.id);
+    setPatientProfile(newDataset.profile);
+    setReminders(newDataset.reminders);
+    setMemories(newDataset.memories);
+    setKnownFaces(newDataset.knownFaces);
+    setTrendData(newDataset.trendData);
+    setGameSessions(newDataset.gameSessions);
   };
 
   // Sync active patient changes back into the `patients` array and localStorage
@@ -131,6 +254,7 @@ export default function App() {
               }),
             });
             const data = await res.json();
+            if (!res.ok) throw new Error(`Gemini request failed: ${res.status}`);
             return {
               ...sess,
               score: data.score || sess.score,
@@ -139,7 +263,8 @@ export default function App() {
               synced: true,
             };
           } catch (e) {
-            return { ...sess, synced: true };
+            // Keep the record in the local queue until a real request succeeds.
+            return sess;
           }
         })
       );
@@ -147,7 +272,13 @@ export default function App() {
       setGameSessions(updatedSessions);
       setLastSyncedTime(new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }));
       setIsSyncing(false);
-      speakText('All queued cognitive sessions have been successfully synced with Gemini cloud!', language);
+      const remainingCount = updatedSessions.filter((session) => !session.synced).length;
+      speakText(
+        remainingCount === 0
+          ? 'All queued cognitive sessions have been successfully updated.'
+          : `${remainingCount} session${remainingCount > 1 ? 's are' : ' is'} still safely saved on this device and will retry when connected.`,
+        language,
+      );
     } catch (err) {
       console.error(err);
       setIsSyncing(false);
@@ -155,10 +286,10 @@ export default function App() {
   };
 
   const handleSessionComplete = (session: GameSession) => {
-    setGameSessions((prev) => [session, ...prev]);
+    const nextGameSessions = [session, ...gameSessions];
     const latestScore = session.score || session.accuracy;
-    setTrendData((prev) => {
-      const copy = [...prev];
+    const nextTrendData = (() => {
+      const copy = [...trendData];
       const lastIdx = copy.length - 1;
       if (lastIdx >= 0) {
         copy[lastIdx] = {
@@ -167,6 +298,19 @@ export default function App() {
         };
       }
       return copy;
+    });
+    setGameSessions(nextGameSessions);
+    setTrendData(nextTrendData);
+
+    // Save the completed session immediately, before the user can close the app.
+    setPatients((previousPatients) => {
+      const updatedPatients = previousPatients.map((patient) =>
+        patient.profile.id === activePatientId
+          ? { ...patient, profile: patientProfile, reminders, memories, knownFaces, trendData: nextTrendData, gameSessions: nextGameSessions }
+          : patient,
+      );
+      localStorage.setItem('mm_patient_datasets', JSON.stringify(updatedPatients));
+      return updatedPatients;
     });
   };
 
@@ -198,13 +342,17 @@ export default function App() {
     setKnownFaces((prev) => [face, ...prev]);
   };
 
+  const effectiveOfflineMode = offlineMode || !isOnline;
+
+  if (!isUnlocked) return <PinLock onUnlocked={() => setIsUnlocked(true)} />;
+
   return (
-    <div className={`min-h-screen bg-[#FBF9F5] text-[#2D2E2E] flex flex-col font-sans ${largeText ? 'text-lg' : 'text-base'}`}>
+    <div className={`min-h-screen bg-[#FAF6F0] text-[#2D2D2D] flex flex-col font-sans ${largeText ? 'text-lg' : 'text-base'}`}>
       {/* Top Header & Navigation */}
       <Header
         currentView={currentView}
         onViewChange={setCurrentView}
-        offlineMode={offlineMode}
+        offlineMode={effectiveOfflineMode}
         onToggleOffline={handleToggleOffline}
         language={language}
         onLanguageChange={setLanguage}
@@ -215,11 +363,15 @@ export default function App() {
         patients={patients}
         activePatientId={activePatientId}
         onSelectPatient={handleSelectPatient}
+        canInstall={installPrompt !== null}
+        onInstall={handleInstall}
+        onExportBackup={handleExportBackup}
+        onRestoreBackup={handleRestoreBackup}
       />
 
       {/* Offline Sync Banner (Simulated offline support) */}
       <OfflineSyncBanner
-        offlineMode={offlineMode}
+        offlineMode={effectiveOfflineMode}
         queuedCount={queuedCount}
         onSync={handleSyncQueued}
         isSyncing={isSyncing}
@@ -240,7 +392,7 @@ export default function App() {
             onAddKnownFace={handleAddKnownFace}
             gameSessions={gameSessions}
             onSessionComplete={handleSessionComplete}
-            offlineMode={offlineMode}
+            offlineMode={effectiveOfflineMode}
             language={language}
             largeText={largeText}
           />
@@ -263,20 +415,18 @@ export default function App() {
       </div>
 
       {/* Footer */}
-      <footer className="bg-white border-t border-[#E5E1D8] py-6 mt-12 text-[#73706A] text-xs sm:text-sm">
+      <footer className="border-t border-[#E8E2D9] bg-[#FAF6F0] py-6 mt-12 text-[#5C5C5C] text-xs sm:text-sm">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 flex flex-col sm:flex-row items-center justify-between gap-3 text-center sm:text-left">
           <div>
-            <span className="font-bold text-[#2D2E2E]">Memory Mate</span> — Elderly Cognitive Care & Reassurance Platform.
-            <span className="block sm:inline sm:ml-2 text-[#73706A] font-medium">
-              Supporting families and community ASHA health volunteers across Northeast India.
+            <span className="font-bold text-[#2D2D2D]">Memory Mate</span> — A calm memory companion for patients, families, and community health workers.
+            <span className="block sm:inline sm:ml-2 text-[#5C5C5C] font-medium">
+              Designed for offline-first care across Northeast India.
             </span>
           </div>
-          <div className="flex items-center gap-3 font-semibold text-[#5C6E53]">
-            <span>Offline-First Architecture</span>
+          <div className="flex items-center gap-3 font-semibold text-[#58745E]">
+            <span>Local data control</span>
             <span>•</span>
-            <span>Gemini AI Engine</span>
-            <span>•</span>
-            <span>Multi-Patient Clinical Care</span>
+            <span>English · অসমীয়া · हिन्दी</span>
           </div>
         </div>
       </footer>
