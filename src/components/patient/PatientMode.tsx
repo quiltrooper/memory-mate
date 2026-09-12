@@ -200,6 +200,7 @@ export const PatientMode: React.FC<PatientModeProps> = ({
       <main id="patient-main-view" className="scroll-mt-32">
         {activeSection === 'assistant' && (
           <MemoryAssistant
+            offlineMode={offlineMode}
             patientProfile={patientProfile}
             reminders={reminders}
             knownFaces={knownFaces}
@@ -230,6 +231,7 @@ export const PatientMode: React.FC<PatientModeProps> = ({
 
         {activeSection === 'memorybox' && (
           <DigitalMemoryBox
+            offlineMode={offlineMode}
             memories={memories}
             onAddMemory={onAddMemory}
             patientProfile={patientProfile}

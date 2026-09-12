@@ -1,3 +1,4 @@
+import { choose } from '../utils/activity';
 import React, { useRef } from 'react';
 import {
   Download,
@@ -102,7 +103,7 @@ export const Header: React.FC<HeaderProps> = ({
               >
                 <User className="h-4 w-4" aria-hidden="true" />
                 <span className="hidden md:inline">{t.patientMode}</span>
-                <span className="md:hidden">Patient</span>
+                <span className="md:hidden">{choose(language,'Patient','रोगी','ব্যক্তি')}</span>
               </button>
               <button
                 id="btn-caregiver-mode"
@@ -112,7 +113,7 @@ export const Header: React.FC<HeaderProps> = ({
               >
                 <ShieldCheck className="h-4 w-4" aria-hidden="true" />
                 <span className="hidden md:inline">{t.caregiverDashboard}</span>
-                <span className="md:hidden">Care</span>
+                <span className="md:hidden">{choose(language,'Care','देखभाल','যত্ন')}</span>
               </button>
             </div>
 
@@ -138,7 +139,7 @@ export const Header: React.FC<HeaderProps> = ({
             <details className="group relative">
               <summary className="flex min-h-10 cursor-pointer list-none items-center gap-2 rounded-xl border border-[#D5DFD0] bg-[#EDF2EE] px-3 text-sm font-bold text-[#58745E] transition-colors hover:bg-[#E1EADF] [&::-webkit-details-marker]:hidden">
                 <Settings2 className="h-4 w-4" aria-hidden="true" />
-                <span className="hidden sm:inline">Options</span>
+                <span className="hidden sm:inline">{choose(language,'Options','विकल्प','বিকল্প')}</span>
               </summary>
               <div className="absolute right-0 top-[calc(100%+8px)] z-50 w-72 space-y-2 rounded-2xl border border-[#E8E2D9] bg-white p-3 shadow-[0_16px_40px_rgba(67,63,57,0.16)]">
                 <button
@@ -148,7 +149,7 @@ export const Header: React.FC<HeaderProps> = ({
                   className={`flex min-h-11 w-full items-center justify-between rounded-xl border px-3 text-left text-sm font-semibold ${offlineMode ? 'border-[#E8D4BE] bg-[#FDF6ED] text-[#8C5E28]' : 'border-[#D5DFD0] bg-[#EDF2EE] text-[#58745E]'}`}
                 >
                   <span className="flex items-center gap-2">{offlineMode ? <WifiOff className="h-4 w-4" /> : <Wifi className="h-4 w-4" />}{offlineMode ? t.offlineMode : t.cloudConnected}</span>
-                  <span className="text-xs">{offlineMode ? 'Simulated' : 'Connected'}</span>
+                  <span className="text-xs">{offlineMode ? choose(language,'Local only','केवल स्थानीय','কেৱল স্থানীয়') : choose(language,'Online','ऑनलाइन','অনলাইন')}</span>
                 </button>
                 {queuedCount > 0 && (
                   <button id="header-sync-btn" type="button" onClick={onSync} className="min-h-11 w-full rounded-xl bg-[#698A70] px-3 text-sm font-bold text-white hover:bg-[#58745E]">
@@ -157,19 +158,19 @@ export const Header: React.FC<HeaderProps> = ({
                 )}
                 {canInstall && (
                   <button id="install-app" type="button" onClick={onInstall} className="flex min-h-11 w-full items-center gap-2 rounded-xl border border-[#D5DFD0] px-3 text-sm font-bold text-[#58745E] hover:bg-[#EDF2EE]">
-                    <Download className="h-4 w-4" /> Install Memory Mate
+                    <Download className="h-4 w-4" /> {choose(language,'Install Memory Mate','Memory Mate इंस्टॉल करें','Memory Mate স্থাপন কৰক')}
                   </button>
                 )}
                 <div className="grid grid-cols-2 gap-2">
                   <button type="button" onClick={onExportBackup} className="flex min-h-11 items-center justify-center gap-1 rounded-xl border border-[#E8E2D9] text-xs font-bold text-[#2D2D2D] hover:bg-[#FAF6F0]">
-                    <Save className="h-4 w-4" /> Backup
+                    <Save className="h-4 w-4" /> {choose(language,'Backup','बैकअप','বেকআপ')}
                   </button>
                   <button type="button" onClick={() => backupInputRef.current?.click()} className="flex min-h-11 items-center justify-center gap-1 rounded-xl border border-[#E8E2D9] text-xs font-bold text-[#2D2D2D] hover:bg-[#FAF6F0]">
-                    <Upload className="h-4 w-4" /> Restore
+                    <Upload className="h-4 w-4" /> {choose(language,'Restore','पुनर्स्थापित','পুনৰুদ্ধাৰ')}
                   </button>
                 </div>
                 <button type="button" onClick={onToggleLargeText} className={`min-h-10 w-full rounded-xl text-sm font-bold ${largeText ? 'bg-[#2D2D2D] text-white' : 'bg-[#FAF6F0] text-[#2D2D2D]'}`}>
-                  {largeText ? 'Use regular text' : 'Use larger text'}
+                  {largeText ? choose(language,'Regular text','सामान्य अक्षर','সাধাৰণ আখৰ') : choose(language,'Larger text','बड़े अक्षर','ডাঙৰ আখৰ')}
                 </button>
               </div>
             </details>

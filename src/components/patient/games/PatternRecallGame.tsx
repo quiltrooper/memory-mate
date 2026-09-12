@@ -1,3 +1,5 @@
+import { saveAndAssess } from '../../../utils/assessment';
+import { choose, adaptiveLevel } from '../../../utils/activity';
 import React, { useState, useEffect, useRef } from 'react';
 import { Play, RotateCcw, Volume2, Sparkles, CheckCircle2, AlertCircle, ArrowRight } from 'lucide-react';
 import { GameSession, Language } from '../../../types';
@@ -7,6 +9,7 @@ import { TRANSLATIONS } from '../../../utils/translations';
 interface PatternRecallGameProps {
   onSessionComplete: (session: GameSession) => void;
   offlineMode: boolean;
+  sessions?: GameSession[];
   language: Language;
 }
 
@@ -51,11 +54,13 @@ const TILES: Tile[] = [
 
 export const PatternRecallGame: React.FC<PatternRecallGameProps> = ({
   onSessionComplete,
+  sessions = [],
   offlineMode,
   language,
 }) => {
   const t = TRANSLATIONS[language];
-  const [sequenceLength, setSequenceLength] = useState<number>(3);
+  const [level, setLevel] = useState(() => adaptiveLevel(sessions, 'pattern'));
+  const [sequenceLength, setSequenceLength] = useState<number>(level + 2);
   const [sequence, setSequence] = useState<number[]>([]);
   const [userStep, setUserStep] = useState<number>(0);
   const [activeTile, setActiveTile] = useState<number | null>(null);
@@ -66,6 +71,8 @@ export const PatternRecallGame: React.FC<PatternRecallGameProps> = ({
   const [latestAiFeedback, setLatestAiFeedback] = useState<{ score?: number; trend?: string; message?: string } | null>(null);
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
 
+  const measurements = useRef({ attempts: 0, correct: 0, responseMs: 0, lastResponseAt: 0 });
+  const saving = useRef(false);
   const timerRef = useRef<NodeJS.Timeout | null>(null);
 
   const generateSequence = (len: number) => {
@@ -98,6 +105,7 @@ export const PatternRecallGame: React.FC<PatternRecallGameProps> = ({
         setTimeout(() => {
           setGameState('playing');
           setStartTime(Date.now());
+          measurements.current.lastResponseAt = Date.now();
           const prompt =
             language === 'as'
               ? 'এতিয়া আপোনাৰ পাল! ক্ৰমত স্পৰ্শ কৰক।'
@@ -124,8 +132,13 @@ export const PatternRecallGame: React.FC<PatternRecallGameProps> = ({
     setActiveTile(tileId);
     setTimeout(() => setActiveTile(null), 250);
 
+    const now = Date.now();
+    measurements.current.responseMs += now - measurements.current.lastResponseAt;
+    measurements.current.lastResponseAt = now;
+    measurements.current.attempts += 1;
     const expected = sequence[userStep];
     if (tileId === expected) {
+      measurements.current.correct += 1;
       if (userStep + 1 === sequence.length) {
         setRoundsCompleted((prev) => prev + 1);
         const newLen = Math.min(6, sequenceLength + 1);
@@ -157,108 +170,15 @@ export const PatternRecallGame: React.FC<PatternRecallGameProps> = ({
   };
 
   const finishSession = async () => {
+    if (saving.current || measurements.current.attempts === 0) return;
+    saving.current = true;
     setIsSubmitting(true);
-    const accuracy = Math.round((roundsCompleted / Math.max(1, roundsCompleted + totalErrors)) * 100);
-    const responseTimeMs = Math.max(2000, Date.now() - startTime);
-
-    if (offlineMode) {
-      const fallbackSession: GameSession = {
-        id: `sess-${Date.now()}`,
-        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-        gameType: 'pattern',
-        gameTitle: t.gamePattern,
-        accuracy,
-        responseTimeMs,
-        errors: totalErrors,
-        level: sequenceLength,
-        score: Math.min(95, Math.max(30, accuracy - totalErrors * 5)),
-        trend: accuracy >= 70 ? 'stable' : 'declining',
-        supportiveMessage:
-          language === 'as'
-            ? 'অফলাইনত সংৰক্ষিত। আপোনাৰ মনোযোগ আৰু শান্ত প্ৰচেষ্টা বহুত শলাগিবলগীয়া!'
-            : language === 'hi'
-            ? 'ऑफ़लाइन सहेजा गया। आपका ध्यान और शांत प्रयास अत्यंत सराहनीय है!'
-            : 'Saved offline. Your focus and gentle repetitions are supporting healthy brain plasticity!',
-        synced: false,
-      };
-
-      setLatestAiFeedback({
-        score: fallbackSession.score,
-        trend: fallbackSession.trend,
-        message: fallbackSession.supportiveMessage,
-      });
-      setIsSubmitting(false);
-      setGameState('completed');
-      onSessionComplete(fallbackSession);
-      return;
-    }
-
-    try {
-      const res = await fetch('/api/gemini/cognitive-score', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          gameType: 'Pattern Recall (Visual Working Memory)',
-          accuracy,
-          responseTimeMs,
-          errors: totalErrors,
-          level: sequenceLength,
-          language,
-        }),
-      });
-
-      const data = await res.json();
-      const session: GameSession = {
-        id: `sess-${Date.now()}`,
-        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-        gameType: 'pattern',
-        gameTitle: t.gamePattern,
-        accuracy,
-        responseTimeMs,
-        errors: totalErrors,
-        level: sequenceLength,
-        score: data.score || 82,
-        trend: data.trend || 'stable',
-        supportiveMessage:
-          data.supportiveMessage ||
-          (language === 'as'
-            ? 'আজিৰ অভ্যাস অতি সুন্দৰ হ’ল!'
-            : language === 'hi'
-            ? 'आज का अभ्यास बहुत अच्छा रहा!'
-            : 'Great effort today!'),
-        synced: true,
-      };
-
-      setLatestAiFeedback({
-        score: data.score,
-        trend: data.trend,
-        message: data.supportiveMessage,
-      });
-      setIsSubmitting(false);
-      setGameState('completed');
-      onSessionComplete(session);
-      speakText(data.supportiveMessage, language);
-    } catch (err) {
-      console.error(err);
-      const fallbackSession: GameSession = {
-        id: `sess-${Date.now()}`,
-        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-        gameType: 'pattern',
-        gameTitle: t.gamePattern,
-        accuracy,
-        responseTimeMs,
-        errors: totalErrors,
-        level: sequenceLength,
-        score: Math.min(95, Math.max(30, accuracy - totalErrors * 5)),
-        trend: accuracy >= 70 ? 'stable' : 'declining',
-        supportiveMessage: 'Saved safely on this device. Your effort today matters.',
-        synced: false,
-      };
-      setLatestAiFeedback({ score: fallbackSession.score, trend: fallbackSession.trend, message: fallbackSession.supportiveMessage });
-      setIsSubmitting(false);
-      setGameState('completed');
-      onSessionComplete(fallbackSession);
-    }
+    const m = measurements.current;
+    const session = await saveAndAssess({ id: crypto.randomUUID(), timestamp: new Date().toISOString(), gameType: 'pattern', gameTitle: t.patternRecallTitle,
+      accuracy: Math.round(m.correct / m.attempts * 100), responseTimeMs: Math.round(m.responseMs / m.attempts), errors: m.attempts - m.correct, level, synced: false }, offlineMode, language, onSessionComplete);
+    setLatestAiFeedback({ score: session.score, trend: choose(language,'Saved locally','स्थानीय रूप से सहेजा','স্থানীয়ভাৱে সংৰক্ষিত'), message: session.supportiveMessage });
+    setIsSubmitting(false);
+    setGameState('completed');
   };
 
   return (
@@ -270,7 +190,7 @@ export const PatternRecallGame: React.FC<PatternRecallGameProps> = ({
             {language === 'as' ? 'দৃষ্টি স্মৃতি আৰু মনোযোগ' : language === 'hi' ? 'दृष्टि स्मृति और एकाग्रता' : 'Visual Memory & Working Attention'}
           </span>
           <h3 className="text-2xl font-bold text-[#2D2E2E] mt-2">
-            {t.gamePattern}
+            {t.patternRecallTitle}
           </h3>
           <p className="text-base text-[#73706A] mt-0.5">
             {language === 'as'
@@ -473,7 +393,7 @@ export const PatternRecallGame: React.FC<PatternRecallGameProps> = ({
           <div className="bg-[#FAF9F6] rounded-2xl p-6 border border-[#E5E1D8] text-center mb-6">
             <div className="inline-flex items-center gap-1.5 bg-[#F0F3EE] text-[#5C6E53] border border-[#D5DFD0] text-xs uppercase font-bold px-3 py-1 rounded-md mb-3">
               <Sparkles className="w-3.5 h-3.5 text-[#7C9070]" />
-              <span>{language === 'as' ? 'জেমিণি বৌদ্ধিক মূল্যাঙ্কন' : language === 'hi' ? 'जेमिनी संज्ञानात्मक मूल्यांकन' : 'Gemini Cognitive Assessment'}</span>
+              <span>{language === 'as' ? 'নথিভুক্ত খেলৰ ফলাফল' : language === 'hi' ? 'दर्ज खेल परिणाम' : 'Recorded game result'}</span>
             </div>
 
             <div className="flex items-center justify-center gap-2 my-2">
@@ -505,6 +425,10 @@ export const PatternRecallGame: React.FC<PatternRecallGameProps> = ({
             <button
               type="button"
               onClick={() => {
+                setLevel(adaptiveLevel(sessions, 'pattern'));
+                setSequenceLength(adaptiveLevel(sessions, 'pattern') + 2);
+                measurements.current = { attempts: 0, correct: 0, responseMs: 0, lastResponseAt: 0 };
+                saving.current = false;
                 setGameState('intro');
                 setRoundsCompleted(0);
                 setTotalErrors(0);

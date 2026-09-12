@@ -1,56 +1,20 @@
-import React, { useMemo } from 'react';
-import { Activity, Brain, CheckCircle2, Clock3, ShieldAlert, Volume2 } from 'lucide-react';
-import { GameSession, Reminder } from '../../types';
-import { RiskPrediction } from '../../ml/riskModel';
-
-interface CareSummaryProps {
-  gameSessions: GameSession[];
-  reminders: Reminder[];
-  riskPrediction: RiskPrediction | null;
-  onSpeak: (text: string) => void;
-}
-
-export const CareSummary: React.FC<CareSummaryProps> = ({ gameSessions, reminders, riskPrediction, onSpeak }) => {
-  const metrics = useMemo(() => {
-    const recent = gameSessions.slice(0, 5);
-    const count = recent.length;
-    return {
-      accuracy: count ? Math.round(recent.reduce((total, item) => total + item.accuracy, 0) / count) : null,
-      response: count ? (recent.reduce((total, item) => total + item.responseTimeMs, 0) / count / 1000).toFixed(1) : null,
-      errors: count ? (recent.reduce((total, item) => total + item.errors, 0) / count).toFixed(1) : null,
-      completed: reminders.filter((item) => item.completed).length,
-    };
-  }, [gameSessions, reminders]);
-
-  const adherence = reminders.length ? Math.round((metrics.completed / reminders.length) * 100) : 0;
-  const followUp = !riskPrediction
-    ? 'Complete a cognitive game to begin the local risk assessment.'
-    : riskPrediction.label === 'High'
-    ? 'Review recent sessions with the family caregiver and ASHA worker.'
-    : riskPrediction.label === 'Medium'
-    ? 'Continue daily activities and review the next few sessions for changes.'
-    : 'Continue the current routine and encourage regular cognitive activities.';
-  const spoken = `Care summary. ${gameSessions.length} sessions recorded. Recent average accuracy is ${metrics.accuracy ?? 'not available'} percent. Reminder completion is ${adherence} percent. ${followUp}`;
-
-  return (
-    <section className="bg-white rounded-2xl p-5 sm:p-6 border border-[#E5E1D8] shadow-xs" aria-labelledby="care-summary-title">
-      <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3 mb-4">
-        <div><h3 id="care-summary-title" className="font-bold text-[#2D2E2E] text-lg">Caregiver Daily Summary</h3><p className="text-xs text-[#73706A] mt-0.5">Recent session metrics stored on this device. The risk signal supports care conversations and does not diagnose dementia.</p></div>
-        <button type="button" onClick={() => onSpeak(spoken)} className="shrink-0 px-3 py-2 bg-[#F0F3EE] hover:bg-[#E6ECE4] text-[#5C6E53] rounded-lg text-xs font-bold flex items-center gap-1.5 border border-[#D5DFD0]"><Volume2 className="w-4 h-4" />Read summary</button>
-      </div>
-      <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
-        <Metric icon={<Brain className="w-4 h-4" />} label="Sessions" value={String(gameSessions.length)} detail="Recorded locally" />
-        <Metric icon={<Activity className="w-4 h-4" />} label="Recent accuracy" value={metrics.accuracy === null ? '—' : `${metrics.accuracy}%`} detail="Last 5 sessions" />
-        <Metric icon={<Clock3 className="w-4 h-4" />} label="Response time" value={metrics.response === null ? '—' : `${metrics.response}s`} detail={metrics.errors === null ? 'No sessions yet' : `${metrics.errors} avg. errors`} />
-        <Metric icon={<CheckCircle2 className="w-4 h-4" />} label="Reminders" value={`${adherence}%`} detail={`${metrics.completed} of ${reminders.length} complete`} />
-        <Metric icon={<ShieldAlert className="w-4 h-4" />} label="Local risk signal" value={riskPrediction?.label ?? 'Pending'} detail={riskPrediction ? `${Math.round(riskPrediction.confidence * 100)}% model confidence` : 'Needs a session'} tone={riskPrediction?.label} />
-      </div>
-      <div className="mt-4 px-3.5 py-3 rounded-xl bg-[#FAF9F6] border border-[#E5E1D8] text-sm text-[#2D2E2E]"><span className="font-bold text-[#5C6E53]">Suggested follow-up: </span>{followUp}</div>
-    </section>
-  );
+import React from 'react';
+import type { GameSession, Reminder, Language } from '../../types';
+import type { RiskPrediction } from '../../ml/riskModel';
+import { choose, recentSessions, sessionConsistency, activitySummary } from '../../utils/activity';
+interface Props {gameSessions: GameSession[]; reminders: Reminder[]; riskPrediction: RiskPrediction | null; onSpeak: (text: string) => void; language?: Language}
+export const CareSummary = ({gameSessions, reminders, riskPrediction, onSpeak, language='en'}: Props) => {
+  const recent = recentSessions(gameSessions);
+  const average = (key: 'accuracy' | 'responseTimeMs' | 'errors') => recent.length ? recent.reduce((n,s) => n+s[key],0)/recent.length : null;
+  const consistency = sessionConsistency(gameSessions);
+  const facts = activitySummary(gameSessions, reminders, language);
+  const accuracy = average('accuracy'); const response = average('responseTimeMs');
+  const items = [
+    [choose(language,'Recent accuracy','हाल की सटीकता','শেহতীয়া শুদ্ধতা'), accuracy === null ? '—' : `${Math.round(accuracy)}%`],
+    [choose(language,'Average response per decision','प्रति निर्णय औसत प्रतिक्रिया','প্ৰতি সিদ্ধান্তৰ গড় সঁহাৰি'), response === null ? '—' : `${(response/1000).toFixed(1)} s`],
+    [choose(language,'Active days (last 7, UTC)','सक्रिय दिन (पिछले 7, UTC)','সক্ৰিয় দিন (যোৱা 7, UTC)'), `${consistency.days}/7`],
+    [choose(language,'Reminders marked complete','पूर्ण चिह्नित अनुस्मारक','সম্পূৰ্ণ চিহ্নিত সোঁৱৰণি'), `${reminders.filter(r=>r.completed).length}/${reminders.length}`],
+    [choose(language,'Activity risk signal','गतिविधि जोखिम संकेत','কাৰ্যকলাপৰ আশংকা সংকেত'), riskPrediction ? ({Low:choose(language,'Low','कम','কম'),Medium:choose(language,'Medium','मध्यम','মধ্যম'),High:choose(language,'High','अधिक','বেছি')}[riskPrediction.label]) : choose(language,'Needs 3 recorded sessions','3 दर्ज सत्र चाहिए','3 টা নথিভুক্ত অধিবেশন লাগে')],
+  ];
+  return <section className="bg-white border border-[#E5E1D8] rounded-2xl p-6 space-y-4"><div className="flex justify-between gap-4"><h3 className="text-lg font-bold">{choose(language,'Caregiver activity summary','देखभालकर्ता गतिविधि सारांश','যত্নদাতাৰ কাৰ্যকলাপৰ সাৰাংশ')}</h3><button className="px-3 py-2 bg-[#F0F3EE] rounded-xl" onClick={()=>onSpeak(facts.weeklySummary)}>{choose(language,'Read summary','सारांश पढ़ें','সাৰাংশ পঢ়ক')}</button></div><p className="text-sm text-[#73706A]">{choose(language,'Recorded activities only. The risk classifier is a synthetic-data prototype, not a diagnosis.','केवल दर्ज गतिविधियाँ। जोखिम वर्गीकरण कृत्रिम डेटा पर बना प्रोटोटाइप है, निदान नहीं।','কেৱল নথিভুক্ত কাৰ্যকলাপ। আশংকা শ্ৰেণীবিভাজন কৃত্ৰিম তথ্যৰ প্ৰটোটাইপ, ৰোগ নিৰ্ণয় নহয়।')}</p><div className="grid grid-cols-2 lg:grid-cols-5 gap-3">{items.map(([label,value])=><div key={label} className="p-3 bg-[#FAF9F6] rounded-xl"><p className="text-sm">{label}</p><p className="text-lg font-bold mt-2">{value}</p></div>)}</div></section>;
 };
-
-function Metric({ icon, label, value, detail, tone }: { icon: React.ReactNode; label: string; value: string; detail: string; tone?: 'Low' | 'Medium' | 'High' }) {
-  const color = tone === 'High' ? 'text-[#9B3B3B]' : tone === 'Medium' ? 'text-[#8C5E28]' : 'text-[#5C6E53]';
-  return <div className="rounded-xl border border-[#E5E1D8] bg-[#FAF9F6] p-3.5 min-h-28"><div className={`flex items-center gap-1.5 text-xs font-semibold ${tone ? color : 'text-[#73706A]'}`}>{icon}{label}</div><p className={`text-xl font-bold mt-2 ${tone ? color : 'text-[#2D2E2E]'}`}>{value}</p><p className="text-[11px] text-[#73706A] mt-1 leading-4">{detail}</p></div>;
-}

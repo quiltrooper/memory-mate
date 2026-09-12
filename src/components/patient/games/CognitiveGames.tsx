@@ -1,3 +1,4 @@
+import { choose, sessionTime } from '../../../utils/activity';
 import React, { useState } from 'react';
 import { GameType, GameSession, Language } from '../../../types';
 import { PatternRecallGame } from './PatternRecallGame';
@@ -19,6 +20,7 @@ export const CognitiveGames: React.FC<CognitiveGamesProps> = ({
   offlineMode,
   language,
 }) => {
+  const [gameRun, setGameRun] = useState(0);
   const [activeGame, setActiveGame] = useState<GameType>('pattern');
   const t = TRANSLATIONS[language];
 
@@ -37,7 +39,7 @@ export const CognitiveGames: React.FC<CognitiveGamesProps> = ({
           }`}
         >
           <LayoutGrid className="w-5 h-5" />
-          <span>1. {t.gamePattern}</span>
+          <span>1. {t.patternRecallTitle}</span>
         </button>
 
         <button
@@ -51,7 +53,7 @@ export const CognitiveGames: React.FC<CognitiveGamesProps> = ({
           }`}
         >
           <Type className="w-5 h-5" />
-          <span>2. {t.gameWord}</span>
+          <span>2. {t.wordRecallTitle}</span>
         </button>
 
         <button
@@ -65,14 +67,17 @@ export const CognitiveGames: React.FC<CognitiveGamesProps> = ({
           }`}
         >
           <ImageIcon className="w-5 h-5" />
-          <span>3. {t.gameMatch}</span>
+          <span>3. {t.pictureMatchingTitle}</span>
         </button>
       </div>
 
+      <div className="flex flex-wrap items-center justify-between gap-3 text-sm"><p>{choose(language, 'Difficulty uses recent recorded performance. Start again after a session to apply the next level.', 'कठिनाई हाल के प्रदर्शन पर आधारित है। अगला स्तर लागू करने के लिए सत्र के बाद फिर शुरू करें।', 'কঠিনতা শেহতীয়া প্ৰদৰ্শনৰ ওপৰত নিৰ্ভৰ কৰে। পৰৱৰ্তী স্তৰৰ বাবে অধিবেশনৰ পিছত পুনৰ আৰম্ভ কৰক।')}</p><button type="button" onClick={() => setGameRun(run => run + 1)} className="rounded-xl border px-3 py-2">{choose(language,'Start a fresh game','नया खेल शुरू करें','নতুন খেল আৰম্ভ কৰক')}</button></div>
       {/* Active Game Display */}
       <div>
         {activeGame === 'pattern' && (
           <PatternRecallGame
+            key={gameRun}
+            sessions={sessions}
             onSessionComplete={onSessionComplete}
             offlineMode={offlineMode}
             language={language}
@@ -80,6 +85,8 @@ export const CognitiveGames: React.FC<CognitiveGamesProps> = ({
         )}
         {activeGame === 'word' && (
           <WordRecallGame
+            key={gameRun}
+            sessions={sessions}
             onSessionComplete={onSessionComplete}
             offlineMode={offlineMode}
             language={language}
@@ -87,6 +94,8 @@ export const CognitiveGames: React.FC<CognitiveGamesProps> = ({
         )}
         {activeGame === 'matching' && (
           <PictureMatchingGame
+            key={gameRun}
+            sessions={sessions}
             onSessionComplete={onSessionComplete}
             offlineMode={offlineMode}
             language={language}
@@ -100,10 +109,10 @@ export const CognitiveGames: React.FC<CognitiveGamesProps> = ({
           <div className="flex items-center justify-between mb-3">
             <h4 className="text-sm font-bold uppercase tracking-wider text-[#73706A] flex items-center gap-2">
               <History className="w-4 h-4 text-[#7C9070]" />
-              <span>{t.recentExercises}</span>
+              <span>{choose(language,'Recent activities','हाल की गतिविधियाँ','শেহতীয়া কাৰ্যকলাপ')}</span>
             </h4>
             <span className="text-xs text-[#73706A]">
-              {language === 'as' ? 'জেমিণি দ্বাৰা মূল্যাঙ্কিত' : language === 'hi' ? 'जेमिनी द्वारा मूल्यांकित' : 'Evaluated by Gemini Clinical Scorer'}
+              {language === 'as' ? 'এই ডিভাইচত জোখা নম্বৰ' : language === 'hi' ? 'इस डिवाइस पर मापा गया स्कोर' : 'Scores measured on this device'}
             </span>
           </div>
 
@@ -123,10 +132,10 @@ export const CognitiveGames: React.FC<CognitiveGamesProps> = ({
                   "{sess.supportiveMessage || 'Good steady effort.'}"
                 </p>
                 <div className="mt-2 text-[11px] text-[#73706A] flex items-center justify-between">
-                  <span>{sess.timestamp}</span>
+                  <span>{sessionTime(sess.timestamp, language)}</span>
                   <span className="flex items-center gap-1 text-[#5C6E53] font-medium">
                     <CheckCircle2 className="w-3 h-3 text-[#7C9070]" />
-                    {sess.synced ? (language === 'as' ? 'সংযুক্ত' : language === 'hi' ? 'सिंक हुआ' : 'Synced') : (language === 'as' ? 'অফলাইন সংৰক্ষিত' : language === 'hi' ? 'ऑफ़लाइन सहेजा' : 'Saved Offline')}
+                    {sess.synced ? (language === 'as' ? 'AI মতামত পোৱা' : language === 'hi' ? 'AI प्रतिक्रिया मिली' : 'AI feedback received') : (language === 'as' ? 'স্থানীয়ভাৱে সংৰক্ষিত' : language === 'hi' ? 'स्थानीय रूप से सहेजा' : 'Saved locally')}
                   </span>
                 </div>
               </div>

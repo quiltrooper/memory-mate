@@ -1,3 +1,4 @@
+import { choose } from './activity';
 import { Language } from '../types';
 
 export const TRANSLATIONS = {
@@ -8,8 +9,8 @@ export const TRANSLATIONS = {
     regionalTag: 'Northeast India',
     patientMode: 'Patient Mode',
     caregiverDashboard: 'Caregiver Dashboard',
-    cloudConnected: 'Cloud Connected',
-    offlineMode: 'Offline Mode (Simulated)',
+    cloudConnected: 'Online mode',
+    offlineMode: 'Local mode',
     sync: 'Sync',
     largeText: 'Aa+',
     patientSelector: 'Patient Profile:',
@@ -27,7 +28,7 @@ export const TRANSLATIONS = {
     tabAssistant: 'Memory Assistant',
     tabAssistantSub: 'Chat & Face Recall',
     tabGames: 'Cognitive Games',
-    tabGamesSub: '3 Adaptive Tests',
+    tabGamesSub: '3 Adaptive Games',
     tabReminders: 'Daily Reminders',
     tabRemindersSub: 'Routine & Medicine',
     tabMemoryBox: 'Digital Memory Box',
@@ -49,12 +50,11 @@ export const TRANSLATIONS = {
     send: 'Send',
     thinking: 'Memory Mate is thinking gently...',
     photoSelected: 'Photo selected for recall',
-    defaultGreeting: (name: string, location: string) =>
-      `Hello, ${name}! I am right here with you today.\n\nYou are at your peaceful home in ${location}, completely safe and surrounded by love. Your family and community health worker have organized your daily routine and medicines with great care.\n\nYou can ask me what is planned for today, when your next medicine or tea is, or show me a photo to recognize anyone you cherish. How are you feeling right now?`,
+    defaultGreeting: (name: string, location: string) => choose('en', `Hello, ${name}. You can review your saved reminders, play a memory game, or open your labeled photos. What would you like to do?`, `नमस्ते, ${name}। आप सहेजे अनुस्मारक देख सकते हैं, स्मृति खेल खेल सकते हैं या नाम वाली तस्वीरें खोल सकते हैं। आप क्या करना चाहेंगे?`, `নমস্কাৰ, ${name}। আপুনি সংৰক্ষিত সোঁৱৰণি চাব পাৰে, স্মৃতিৰ খেল খেলিব পাৰে বা নামযুক্ত ছবি খুলিব পাৰে। আপুনি কি কৰিব বিচাৰে?`),
 
     // Cognitive Games
     gamesTitle: 'Cognitive Exercise Games',
-    gamesSubtitle: 'Gentle, adaptive games that measure accuracy and memory to assess cognitive wellness with Gemini.',
+    gamesSubtitle: 'Gentle, adaptive games that measure accuracy and memory to assess cognitive wellness with local records.',
     patternRecallTitle: 'Pattern Recall',
     patternRecallSub: 'Adaptive tile sequence test',
     wordRecallTitle: 'Word Recall',
@@ -76,7 +76,7 @@ export const TRANSLATIONS = {
     selectRecalledWords: 'Which words were shown earlier?',
     checkAnswers: 'Check Answers',
     completedSession: 'Session Complete!',
-    submittingToGemini: 'Evaluating with Gemini...',
+    submittingToGemini: 'Evaluating with local records...',
 
     // Reminders
     remindersTitle: "Today's Routine Reminders",
@@ -94,7 +94,7 @@ export const TRANSLATIONS = {
     // Digital Memory Box
     memoryBoxTitle: 'Digital Memory Box',
     memoryBoxBadge: 'Nostalgia & Reminiscence Therapy',
-    memoryBoxSub: "Cherished family photos and stories. Tap 'Tell Me About This' to reminisce warmly with Gemini.",
+    memoryBoxSub: "Cherished family photos and stories. Tap 'Tell Me About This' to reminisce warmly with local records.",
     addNewMemory: 'Add New Memory',
     tellMeAboutThis: 'Tell Me About This',
     revisitMemory: 'Revisit Memory (Voice Prompt)',
@@ -162,8 +162,7 @@ export const TRANSLATIONS = {
     send: 'প্ৰেৰণ কৰক',
     thinking: 'মেমৰি মেটে শান্তভাৱে চিন্তা কৰিছে...',
     photoSelected: 'চিনাক্তকৰণৰ বাবে ফটো বাছনি কৰা হৈছে',
-    defaultGreeting: (name: string, location: string) =>
-      `নমস্কাৰ, ${name}! মই আপোনাৰ ওচৰতেই আছোঁ।\n\nআপুনি ${location}ৰ শান্ত আৰু আপোন ঘৰখনতেই সম্পূৰ্ণ সুৰক্ষিত হৈ আছে। আপোনাৰ পৰিয়াল আৰু আশা স্বাস্থ্যকৰ্মীয়ে আজিৰ সকলো ঔষধ আৰু দৈনন্দিন কাৰ্যসূচী সুন্দৰকৈ সজাই থৈছে।\n\nআজিৰ দিনটোৰ কাম, ঔষধৰ সময় বা কোনো চিনাকি মুখ চিনিবলৈ মোক সুধিব পাৰে। আপোনাৰ মনটো এতিয়া কেনে লাগিছে কওকচোন?`,
+    defaultGreeting: (name: string, location: string) => choose('as', `Hello, ${name}. You can review your saved reminders, play a memory game, or open your labeled photos. What would you like to do?`, `नमस्ते, ${name}। आप सहेजे अनुस्मारक देख सकते हैं, स्मृति खेल खेल सकते हैं या नाम वाली तस्वीरें खोल सकते हैं। आप क्या करना चाहेंगे?`, `নমস্কাৰ, ${name}। আপুনি সংৰক্ষিত সোঁৱৰণি চাব পাৰে, স্মৃতিৰ খেল খেলিব পাৰে বা নামযুক্ত ছবি খুলিব পাৰে। আপুনি কি কৰিব বিচাৰে?`),
 
     // Cognitive Games
     gamesTitle: 'মানসিক ব্যায়াম খেলসমূহ',
@@ -230,7 +229,7 @@ export const TRANSLATIONS = {
   hi: {
     // Header & Meta
     appName: 'मेमरी मेट (Memory Mate)',
-    tagline: 'संज्ञानात्मक मूल्यांकन और आश्वस्त करने वाला स्मृति साथी',
+    tagline: 'खेल का परिणाम और आश्वस्त करने वाला स्मृति साथी',
     regionalTag: 'पूर्वोत्तर भारत',
     patientMode: 'मरीज़ मोड',
     caregiverDashboard: 'देखभालकर्ता डैशबोर्ड',
@@ -275,8 +274,7 @@ export const TRANSLATIONS = {
     send: 'भेजें',
     thinking: 'मेमरी मेट शांत भाव से सोच रहा है...',
     photoSelected: 'पहचान के लिए फ़ोटो चुनी गई',
-    defaultGreeting: (name: string, location: string) =>
-      `नमस्ते, ${name}! मैं आज आपके साथ हूँ।\n\nआप ${location} स्थित अपने सुखद और शांत घर में पूरी तरह सुरक्षित हैं। आपके परिजनों और आशा स्वास्थ्य कार्यकर्ता ने आपकी सभी दवाइयाँ और दैनिक दिनचर्या बहुत प्यार से व्यवस्थित कर रखी है।\n\nआप मुझसे आज के कार्यों, अगली दवाई के समय, या किसी भी प्रियजन को पहचानने के लिए फ़ोटो दिखाकर पूछ सकते हैं। आप अभी कैसा महसूस कर रहे हैं?`,
+    defaultGreeting: (name: string, location: string) => choose('hi', `Hello, ${name}. You can review your saved reminders, play a memory game, or open your labeled photos. What would you like to do?`, `नमस्ते, ${name}। आप सहेजे अनुस्मारक देख सकते हैं, स्मृति खेल खेल सकते हैं या नाम वाली तस्वीरें खोल सकते हैं। आप क्या करना चाहेंगे?`, `নমস্কাৰ, ${name}। আপুনি সংৰক্ষিত সোঁৱৰণি চাব পাৰে, স্মৃতিৰ খেল খেলিব পাৰে বা নামযুক্ত ছবি খুলিব পাৰে। আপুনি কি কৰিব বিচাৰে?`),
 
     // Cognitive Games
     gamesTitle: 'संज्ञानात्मक दिमागी खेल',

@@ -1,75 +1,14 @@
 import React from 'react';
-import { WifiOff, CloudUpload, CheckCircle2 } from 'lucide-react';
-
-interface OfflineSyncBannerProps {
-  offlineMode: boolean;
-  queuedCount: number;
-  onSync: () => void;
-  isSyncing: boolean;
-  lastSyncedTime?: string;
-}
-
-export const OfflineSyncBanner: React.FC<OfflineSyncBannerProps> = ({
-  offlineMode,
-  queuedCount,
-  onSync,
-  isSyncing,
-  lastSyncedTime,
-}) => {
-  if (!offlineMode && queuedCount === 0) {
-    return null;
-  }
-
-  return (
-    <div
-      id="offline-sync-banner"
-      className="bg-[#F5F3EF] border-b border-[#E5E1D8] px-4 py-2.5 sm:px-6"
-    >
-      <div className="max-w-7xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-2 text-sm text-[#2D2E2E]">
-        <div className="flex items-center gap-2">
-          {offlineMode ? (
-            <WifiOff className="w-4 h-4 text-[#8C5E28] shrink-0" />
-          ) : (
-            <CloudUpload className="w-4 h-4 text-[#7C9070] shrink-0" />
-          )}
-          <span>
-            {offlineMode ? (
-              <>
-                <strong className="font-semibold text-[#2D2E2E]">Offline Mode Active:</strong> All cognitive games and notes are saved safely on your device.
-              </>
-            ) : (
-              <>
-                <strong className="font-semibold text-[#2D2E2E]">Local Queue:</strong> You have {queuedCount} game session{queuedCount > 1 ? 's' : ''} stored locally awaiting sync.
-              </>
-            )}
-            {lastSyncedTime && (
-              <span className="hidden md:inline ml-2 text-[#73706A]">
-                (Last synced: {lastSyncedTime})
-              </span>
-            )}
-          </span>
-        </div>
-
-        <div className="flex items-center gap-2">
-          {queuedCount > 0 ? (
-            <button
-              id="sync-now-banner-btn"
-              type="button"
-              onClick={onSync}
-              disabled={isSyncing}
-              className="px-3.5 py-1.5 bg-[#7C9070] hover:bg-[#687A5E] disabled:bg-[#D5DFD0] text-white font-semibold rounded-lg text-xs sm:text-sm flex items-center gap-1.5 transition-colors shadow-xs"
-            >
-              <CloudUpload className="w-4 h-4" />
-              <span>{isSyncing ? 'Syncing with Gemini...' : `Sync Now (${queuedCount})`}</span>
-            </button>
-          ) : (
-            <div className="flex items-center gap-1 text-xs font-semibold text-[#5C6E53] bg-[#F0F3EE] border border-[#D5DFD0] px-2.5 py-1 rounded-md">
-              <CheckCircle2 className="w-3.5 h-3.5" />
-              <span>All records up to date</span>
-            </div>
-          )}
-        </div>
-      </div>
+import type { Language } from '../types';
+import { choose } from '../utils/activity';
+interface Props { offlineMode: boolean; queuedCount: number; onSync: () => void; isSyncing: boolean; lastSyncedTime?: string; language?: Language; aiConfigured?: boolean; message?: string }
+export const OfflineSyncBanner: React.FC<Props> = ({offlineMode, queuedCount, onSync, isSyncing, lastSyncedTime, language='en' as Language, aiConfigured=false, message}) => (
+  <section id="offline-sync-banner" role="status" className="bg-[#F5F3EF] border-b border-[#E5E1D8] px-5 py-3 text-sm text-[#2D2E2E]">
+    <div className="max-w-7xl mx-auto flex flex-wrap items-center justify-between gap-3">
+      <div><strong>{offlineMode ? choose(language,'Offline mode','ऑफ़लाइन मोड','অফলাইন অৱস্থা') : aiConfigured ? choose(language,'AI key configured; requests may still be unavailable','AI कुंजी जुड़ी है; अनुरोध फिर भी अनुपलब्ध हो सकते हैं','AI কী সংযুক্ত; অনুৰোধ তথাপি অনুপলব্ধ হ’ব পাৰে') : choose(language,'AI unavailable — local features are ready','AI अनुपलब्ध — स्थानीय सुविधाएँ तैयार हैं','AI উপলব্ধ নহয় — স্থানীয় সুবিধা সাজু আছে')}</strong>
+      <p>{choose(language,`${queuedCount} activities awaiting optional AI feedback. Records stay on this device; export a backup to keep a copy.`,`${queuedCount} गतिविधियों की वैकल्पिक AI प्रतिक्रिया बाकी है। रिकॉर्ड इस डिवाइस पर हैं; प्रतिलिपि के लिए बैकअप निर्यात करें।`,`${queuedCount} টা কাৰ্যকলাপৰ ঐচ্ছিক AI মতামত বাকী। নথি এই ডিভাইচত আছে; প্ৰতিলিপিৰ বাবে বেকআপ উলিয়াওক।`)}</p>
+      {message && <p>{message}</p>}{lastSyncedTime && <p>{choose(language,'Last AI feedback: ','अंतिम AI प्रतिक्रिया: ','শেষ AI মতামত: ')}{lastSyncedTime}</p>}</div>
+      {queuedCount > 0 && <button id="sync-now-banner-btn" type="button" disabled={offlineMode || !aiConfigured || isSyncing} onClick={onSync} className="rounded-xl bg-[#58745E] text-white px-4 py-2 disabled:opacity-50">{isSyncing ? choose(language,'Requesting feedback…','प्रतिक्रिया मिल रही है…','মতামত অনুৰোধ কৰা হৈছে…') : choose(language,'Retry AI feedback','AI प्रतिक्रिया फिर माँगें','AI মতামত পুনৰ চেষ্টা কৰক')}</button>}
     </div>
-  );
-};
+  </section>
+);

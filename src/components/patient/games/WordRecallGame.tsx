@@ -1,3 +1,5 @@
+import { saveAndAssess } from '../../../utils/assessment';
+import { choose, adaptiveLevel } from '../../../utils/activity';
 import React, { useState, useEffect, useMemo } from 'react';
 import { Play, Clock, Sparkles, Volume2, CheckCircle2, RotateCcw, ArrowRight, Brain } from 'lucide-react';
 import { GameSession, Language } from '../../../types';
@@ -7,17 +9,21 @@ import { TRANSLATIONS, WORD_RECALL_POOLS } from '../../../utils/translations';
 interface WordRecallGameProps {
   onSessionComplete: (session: GameSession) => void;
   offlineMode: boolean;
+  sessions?: GameSession[];
   language: Language;
 }
 
 export const WordRecallGame: React.FC<WordRecallGameProps> = ({
   onSessionComplete,
+  sessions = [],
   offlineMode,
   language,
 }) => {
   const t = TRANSLATIONS[language];
+  const [level, setLevel] = useState(() => adaptiveLevel(sessions, 'word'));
   const wordPool = WORD_RECALL_POOLS[language] || WORD_RECALL_POOLS.en;
-  const targetWords = wordPool.target;
+  const wordCount = level + 2;
+  const targetWords = wordPool.target.slice(0, wordCount);
   const distractorWords = wordPool.distractor;
 
   const [phase, setPhase] = useState<'intro' | 'memorize' | 'distraction' | 'recall' | 'completed'>('intro');
@@ -62,10 +68,10 @@ export const WordRecallGame: React.FC<WordRecallGameProps> = ({
       setRecallStartTime(Date.now());
       const prompt =
         language === 'as'
-          ? 'এতিয়া আগতে দেখা ৫ টা শব্দ মনত পেলাই বাছনি কৰক।'
+          ? 'এতিয়া আগতে দেখা দেখুওৱা শব্দ মনত পেলাই বাছনি কৰক।'
           : language === 'hi'
-          ? 'अब जो ५ शब्द आपने पहले देखे थे, उन्हें चुनिए।'
-          : 'Now, please choose the five words you remembered from earlier.';
+          ? 'अब जो दिखाए गए शब्द आपने पहले देखे थे, उन्हें चुनिए।'
+          : 'Now, please choose the words shown you remembered from earlier.';
       speakText(prompt, language);
     }
     return () => clearInterval(interval);
@@ -78,10 +84,10 @@ export const WordRecallGame: React.FC<WordRecallGameProps> = ({
     setPhase('memorize');
     const prompt =
       language === 'as'
-        ? 'এই ৫ টা শব্দ মনোযোগেৰে পঢ়ক। আপোনাৰ ১০ ছেকেণ্ড আছে।'
+        ? 'এই দেখুওৱা শব্দ মনোযোগেৰে পঢ়ক। আপোনাৰ ১০ ছেকেণ্ড আছে।'
         : language === 'hi'
-        ? 'इन ५ शब्दों को ध्यान से पढ़ें। आपके पास १० सेकंड हैं।'
-        : 'Read these five words carefully. You have ten seconds.';
+        ? 'इन दिखाए गए शब्दों को ध्यान से पढ़ें। आपके पास १० सेकंड हैं।'
+        : 'Read these words shown carefully. You have ten seconds.';
     speakText(prompt, language);
   };
 
@@ -93,7 +99,7 @@ export const WordRecallGame: React.FC<WordRecallGameProps> = ({
         ? 'মনত থকা শব্দকেইটা বাছক।'
         : language === 'hi'
         ? 'जो शब्द याद हैं उन्हें चुनिए।'
-        : 'Please select the five words you remember from earlier.';
+        : 'Please select the words shown you remember from earlier.';
     speakText(prompt, language);
   };
 
@@ -101,130 +107,23 @@ export const WordRecallGame: React.FC<WordRecallGameProps> = ({
     if (selectedWords.includes(word)) {
       setSelectedWords((prev) => prev.filter((w) => w !== word));
     } else {
-      if (selectedWords.length < 5) {
+      if (selectedWords.length < wordCount) {
         setSelectedWords((prev) => [...prev, word]);
       }
     }
   };
 
   const submitRecall = async () => {
+    if (isSubmitting) return;
     setIsSubmitting(true);
-    const targetWordStrings = targetWords.map((w) => w.word);
-    const correctCount = selectedWords.filter((w) => targetWordStrings.includes(w)).length;
-    const errors = selectedWords.length - correctCount;
-    const accuracy = Math.round((correctCount / 5) * 100);
-    const responseTimeMs = Math.max(1500, Date.now() - recallStartTime);
-
-    if (offlineMode) {
-      const fallbackSession: GameSession = {
-        id: `sess-${Date.now()}`,
-        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-        gameType: 'word',
-        gameTitle: t.gameWord,
-        accuracy,
-        responseTimeMs,
-        errors,
-        level: 1,
-        score: Math.min(95, Math.max(30, accuracy - errors * 5)),
-        trend: accuracy >= 80 ? 'improving' : accuracy >= 60 ? 'stable' : 'declining',
-        supportiveMessage:
-          language === 'as'
-            ? 'অফলাইনত সংৰক্ষিত। আপুনি মনোগ্ৰাহীভাৱে শব্দসমূহ মনত ৰাখিছে!'
-            : language === 'hi'
-            ? 'ऑफ़लाइन सहेजा गया। आपने धैर्य और एकाग्रता के साथ शब्द याद रखे!'
-            : 'Saved offline. You remembered several key words with calm concentration!',
-        synced: false,
-      };
-      setLatestAiFeedback({
-        score: fallbackSession.score || 75,
-        trend: fallbackSession.trend || 'stable',
-        message: fallbackSession.supportiveMessage || '',
-      });
-      setIsSubmitting(false);
-      setPhase('completed');
-      onSessionComplete(fallbackSession);
-      return;
-    }
-
-    try {
-      const res = await fetch('/api/gemini/cognitive-score', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          gameType: 'Delayed Word Recall (Episodic Memory)',
-          accuracy,
-          responseTimeMs,
-          errors,
-          level: 1,
-          language,
-        }),
-      });
-
-      const data = await res.json();
-      const session: GameSession = {
-        id: `sess-${Date.now()}`,
-        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-        gameType: 'word',
-        gameTitle: t.gameWord,
-        accuracy,
-        responseTimeMs,
-        errors,
-        level: 1,
-        score: data.score || 75,
-        trend: data.trend || 'stable',
-        supportiveMessage:
-          data.supportiveMessage ||
-          (language === 'as'
-            ? 'আপোনাৰ স্মৃতিশক্তিৰ প্ৰয়াস অতি প্ৰশংসনীয়।'
-            : language === 'hi'
-            ? 'आपकी स्मरण शक्ति का प्रयास बहुत सुंदर रहा।'
-            : 'Well done retaining words across delay!'),
-        synced: true,
-      };
-
-      setLatestAiFeedback({
-        score: session.score || 75,
-        trend: session.trend || 'stable',
-        message: session.supportiveMessage || '',
-      });
-      setIsSubmitting(false);
-      setPhase('completed');
-      onSessionComplete(session);
-      speakText(session.supportiveMessage || '', language);
-    } catch (err) {
-      console.error(err);
-      const fallbackSession: GameSession = {
-        id: `sess-${Date.now()}`,
-        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-        gameType: 'word',
-        gameTitle: t.gameWord,
-        accuracy,
-        responseTimeMs,
-        errors,
-        level: 1,
-        score: Math.max(50, accuracy),
-        trend: 'stable',
-        supportiveMessage:
-          language === 'as'
-            ? 'অতি সুন্দৰ প্ৰচেষ্টা! শান্তভাৱে মনত ৰখাৰ বাবে ধন্যবাদ।'
-            : language === 'hi'
-            ? 'बहुत अच्छा प्रयास! शांत रहकर शब्द याद करने के लिए साधुवाद।'
-            : 'Very calm and steady memory effort!',
-        synced: false,
-      };
-      setLatestAiFeedback({
-        score: fallbackSession.score || 70,
-        trend: 'stable',
-        message: fallbackSession.supportiveMessage || '',
-      });
-      setIsSubmitting(false);
-      setPhase('completed');
-      onSessionComplete(fallbackSession);
-      speakText(fallbackSession.supportiveMessage || '', language);
-    }
+    const correctCount = selectedWords.filter(w => targetWords.some(target => target.word === w)).length;
+    const session = await saveAndAssess({ id: crypto.randomUUID(), timestamp: new Date().toISOString(), gameType: 'word', gameTitle: t.wordRecallTitle,
+      accuracy: Math.round(correctCount / wordCount * 100), responseTimeMs: Math.round((Date.now() - recallStartTime) / wordCount), errors: wordCount - correctCount, level, synced: false }, offlineMode, language, onSessionComplete);
+    setLatestAiFeedback({ score: session.score!, trend: choose(language,'Saved locally','स्थानीय रूप से सहेजा','স্থানীয়ভাৱে সংৰক্ষিত'), message: session.supportiveMessage! });
+    setIsSubmitting(false);
+    setPhase('completed');
   };
 
-  // Combine target + distractor and shuffle deterministically for recall phase
   const allWordChoices = useMemo(() => {
     const combined = [...targetWords, ...distractorWords];
     return combined.sort((a, b) => a.word.localeCompare(b.word));
@@ -239,14 +138,14 @@ export const WordRecallGame: React.FC<WordRecallGameProps> = ({
             <Brain className="w-8 h-8 text-[#7C9070]" />
           </div>
           <h3 className="text-2xl sm:text-3xl font-bold text-[#2D2E2E] mb-2">
-            {t.gameWord}
+            {t.wordRecallTitle}
           </h3>
           <p className="text-[#575551] text-base sm:text-lg mb-6 leading-relaxed">
             {language === 'as'
-              ? 'আপোনাক ৫ টা চিনাকি শব্দ ১০ ছেকেণ্ডৰ বাবে দেখুওৱা হ’ব। তাৰ পিছত এটা চুটি জিৰণি থাকিব, আৰু তাৰ পিছত আপুনি মনত থকা শব্দবোৰ বাছনি কৰিব লাগিব।'
+              ? 'আপোনাক কেইটামান চিনাকি শব্দ ১০ ছেকেণ্ডৰ বাবে দেখুওৱা হ’ব। তাৰ পিছত এটা চুটি জিৰণি থাকিব, আৰু তাৰ পিছত আপুনি মনত থকা শব্দবোৰ বাছনি কৰিব লাগিব।'
               : language === 'hi'
-              ? 'आपको १० सेकंड के लिए ५ परिचित शब्द दिखाए जाएंगे। इसके बाद एक छोटा विश्राम कार्य होगा, फिर आपको वे शब्द याद करके चुनने होंगे।'
-              : 'You will see 5 familiar words for 10 seconds. After a short 30-second distraction task, you will choose which words you remember.'}
+              ? 'आपको १० सेकंड के लिए कुछ परिचित शब्द दिखाए जाएंगे। इसके बाद एक छोटा विश्राम कार्य होगा, फिर आपको वे शब्द याद करके चुनने होंगे।'
+              : 'You will see a few familiar words for 10 seconds. After a short 30-second distraction task, you will choose which words you remember.'}
           </p>
 
           <button
@@ -357,14 +256,14 @@ export const WordRecallGame: React.FC<WordRecallGameProps> = ({
         <div className="py-4 max-w-2xl mx-auto">
           <div className="text-center mb-6">
             <h4 className="text-2xl font-bold text-[#2D2E2E]">
-              {language === 'as' ? 'আগতে কোন ৫ টা শব্দ দেখা পাইছিল?' : language === 'hi' ? 'पहले आपने कौन से ५ शब्द देखे थे?' : 'Which 5 words did you see earlier?'}
+              {language === 'as' ? 'আগতে কোন দেখুওৱা শব্দ দেখা পাইছিল?' : language === 'hi' ? 'पहले आपने कौन से दिखाए गए शब्द देखे थे?' : 'Which words shown did you see earlier?'}
             </h4>
             <p className="text-[#73706A] text-base sm:text-lg mt-1">
               {language === 'as'
-                ? `৫ টা শব্দ বাছক (${selectedWords.length}/৫ নিৰ্বাচিত):`
+                ? `দেখুওৱা শব্দ বাছক (${selectedWords.length}/${wordCount} নিৰ্বাচিত):`
                 : language === 'hi'
-                ? `५ शब्दों का चयन करें (${selectedWords.length}/५ चुने गए):`
-                : `Tap up to 5 words (${selectedWords.length}/5 selected):`}
+                ? `दिखाए गए शब्दों का चयन करें (${selectedWords.length}/${wordCount} चुने गए):`
+                : `Select the words you remember (${selectedWords.length}/${wordCount} selected):`}
             </p>
           </div>
 
@@ -402,10 +301,10 @@ export const WordRecallGame: React.FC<WordRecallGameProps> = ({
           <div className="flex items-center justify-between pt-4 border-t border-[#E5E1D8]">
             <span className="text-[#73706A] text-sm font-semibold">
               {language === 'as'
-                ? `৫ টাৰ ভিতৰত ${selectedWords.length} টা বাছনি কৰা হ’ল`
+                ? `${wordCount} টাৰ ভিতৰত ${selectedWords.length} টা বাছনি কৰা হ’ল`
                 : language === 'hi'
-                ? `५ में से ${selectedWords.length} शब्द चुने गए`
-                : `${selectedWords.length} of 5 words chosen`}
+                ? `${wordCount} में से ${selectedWords.length} शब्द चुने गए`
+                : `${selectedWords.length} of words shown chosen`}
             </span>
 
             <button
@@ -414,7 +313,7 @@ export const WordRecallGame: React.FC<WordRecallGameProps> = ({
               onClick={submitRecall}
               className="px-8 py-3.5 bg-[#7C9070] hover:bg-[#687A5E] disabled:bg-[#E5E1D8] disabled:text-[#73706A] text-white font-semibold text-base sm:text-lg rounded-xl shadow-xs transition-colors flex items-center gap-2 min-h-[52px]"
             >
-              <span>{isSubmitting ? (language === 'as' ? 'জেমিণি বিশ্লেষণ চলিছে...' : language === 'hi' ? 'जेमिनी विश्लेषण जारी...' : 'Analyzing with Gemini...') : (language === 'as' ? 'শব্দ পৰীক্ষা কৰক' : language === 'hi' ? 'शब्द जांचें' : 'Check My Words')}</span>
+              <span>{isSubmitting ? (language === 'as' ? 'কাৰ্যকলাপ সংৰক্ষণ চলিছে...' : language === 'hi' ? 'गतिविधि सहेज रहे हैं...' : 'Saving activity...') : (language === 'as' ? 'শব্দ পৰীক্ষা কৰক' : language === 'hi' ? 'शब्द जांचें' : 'Check My Words')}</span>
               <ArrowRight className="w-5 h-5" />
             </button>
           </div>
@@ -427,7 +326,7 @@ export const WordRecallGame: React.FC<WordRecallGameProps> = ({
           <div className="bg-[#FAF9F6] rounded-2xl p-6 border border-[#E5E1D8] text-center mb-6">
             <div className="inline-flex items-center gap-1.5 bg-[#F0F3EE] text-[#5C6E53] border border-[#D5DFD0] text-xs uppercase font-bold px-3 py-1 rounded-md mb-3">
               <Sparkles className="w-3.5 h-3.5 text-[#7C9070]" />
-              <span>{language === 'as' ? 'জেমিণি বৌদ্ধিক মূল্যাঙ্কন' : language === 'hi' ? 'जेमिनी संज्ञानात्मक मूल्यांकन' : 'Gemini Cognitive Assessment'}</span>
+              <span>{language === 'as' ? 'নথিভুক্ত খেলৰ ফলাফল' : language === 'hi' ? 'दर्ज खेल परिणाम' : 'Recorded game result'}</span>
             </div>
 
             <div className="flex items-center justify-center gap-2 my-2">
@@ -459,6 +358,7 @@ export const WordRecallGame: React.FC<WordRecallGameProps> = ({
             <button
               type="button"
               onClick={() => {
+                setLevel(adaptiveLevel(sessions, 'word'));
                 setPhase('intro');
                 setSelectedWords([]);
               }}

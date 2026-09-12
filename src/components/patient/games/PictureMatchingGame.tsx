@@ -1,4 +1,6 @@
-import React, { useState } from 'react';
+import { saveAndAssess } from '../../../utils/assessment';
+import { choose, adaptiveLevel } from '../../../utils/activity';
+import React, { useState, useRef, useEffect } from 'react';
 import { Play, RotateCcw, Sparkles, Volume2, Coffee, Flower2, Home, Sun, Heart, Bird } from 'lucide-react';
 import { GameSession, Language } from '../../../types';
 import { speakText } from '../../../utils/speech';
@@ -7,6 +9,7 @@ import { TRANSLATIONS } from '../../../utils/translations';
 interface PictureMatchingGameProps {
   onSessionComplete: (session: GameSession) => void;
   offlineMode: boolean;
+  sessions?: GameSession[];
   language: Language;
 }
 
@@ -67,10 +70,19 @@ const ICONS_CONFIG: IconConfig[] = [
 
 export const PictureMatchingGame: React.FC<PictureMatchingGameProps> = ({
   onSessionComplete,
+  sessions = [],
   offlineMode,
   language,
 }) => {
   const t = TRANSLATIONS[language];
+  const [level, setLevel] = useState(() => adaptiveLevel(sessions, 'matching'));
+  const pairCount = level + 3;
+  const measurements = useRef({ responseMs: 0, lastAt: 0, turns: 0 });
+  const timers = useRef<ReturnType<typeof setTimeout>[]>([]);
+  const clickLocked = useRef(false);
+  const saving = useRef(false);
+  useEffect(() => () => timers.current.forEach(clearTimeout), []);
+  const later = (fn: () => void, ms: number) => timers.current.push(setTimeout(fn, ms));
   const [cards, setCards] = useState<CardItem[]>([]);
   const [flippedCardIds, setFlippedCardIds] = useState<number[]>([]);
   const [gameState, setGameState] = useState<'intro' | 'playing' | 'completed'>('intro');
@@ -81,10 +93,13 @@ export const PictureMatchingGame: React.FC<PictureMatchingGameProps> = ({
   const [latestAiFeedback, setLatestAiFeedback] = useState<{ score: number; trend: string; message: string } | null>(null);
 
   const initGame = () => {
+    timers.current.forEach(clearTimeout); timers.current = [];
+    const nextLevel = adaptiveLevel(sessions, 'matching');
+    setLevel(nextLevel);
     const deck: CardItem[] = [];
     let idCounter = 0;
 
-    ICONS_CONFIG.forEach((cfg) => {
+    ICONS_CONFIG.slice(0, nextLevel + 3).forEach((cfg) => {
       for (let i = 0; i < 2; i++) {
         deck.push({
           id: idCounter++,
@@ -103,6 +118,9 @@ export const PictureMatchingGame: React.FC<PictureMatchingGameProps> = ({
     setMoves(0);
     setErrors(0);
     setStartTime(Date.now());
+    measurements.current = {responseMs: 0, lastAt: Date.now(), turns: 0};
+    saving.current = false;
+    clickLocked.current = false;
     setGameState('playing');
     const startPrompt =
       language === 'as'
@@ -114,7 +132,7 @@ export const PictureMatchingGame: React.FC<PictureMatchingGameProps> = ({
   };
 
   const handleCardClick = (cardId: number) => {
-    if (flippedCardIds.length === 2) return;
+    if (clickLocked.current || gameState !== 'playing' || flippedCardIds.length === 2) return;
     const clickedCard = cards.find((c) => c.id === cardId);
     if (!clickedCard || clickedCard.isMatched || clickedCard.isFlipped) return;
 
@@ -125,18 +143,23 @@ export const PictureMatchingGame: React.FC<PictureMatchingGameProps> = ({
     setFlippedCardIds(newFlipped);
 
     if (newFlipped.length === 2) {
+      clickLocked.current = true;
+      measurements.current.responseMs += Date.now() - measurements.current.lastAt;
+      measurements.current.turns += 1;
       setMoves((m) => m + 1);
       const firstCard = newCards.find((c) => c.id === newFlipped[0])!;
       const secondCard = newCards.find((c) => c.id === newFlipped[1])!;
 
       if (firstCard.pairKey === secondCard.pairKey) {
-        setTimeout(() => {
+        later(() => {
           setCards((prev) =>
             prev.map((c) =>
               c.pairKey === firstCard.pairKey ? { ...c, isMatched: true, isFlipped: true } : c
             )
           );
           setFlippedCardIds([]);
+          clickLocked.current = false;
+          measurements.current.lastAt = Date.now();
 
           const remainingUnmatched = newCards.filter(
             (c) => !c.isMatched && c.pairKey !== firstCard.pairKey
@@ -147,123 +170,29 @@ export const PictureMatchingGame: React.FC<PictureMatchingGameProps> = ({
         }, 500);
       } else {
         setErrors((e) => e + 1);
-        setTimeout(() => {
+        later(() => {
           setCards((prev) =>
             prev.map((c) =>
               newFlipped.includes(c.id) ? { ...c, isFlipped: false } : c
             )
           );
           setFlippedCardIds([]);
+          clickLocked.current = false;
+          measurements.current.lastAt = Date.now();
         }, 900);
       }
     }
   };
 
   const finishSession = async (finalMoves: number, finalErrors: number) => {
+    if (saving.current) return;
+    saving.current = true;
     setIsSubmitting(true);
-    const duration = Date.now() - startTime;
-    const accuracy = Math.round(Math.max(35, Math.min(100, (6 / finalMoves) * 100)));
-    const responseTimeMs = Math.round(duration / Math.max(1, finalMoves));
-
-    if (offlineMode) {
-      const fallbackSession: GameSession = {
-        id: `sess-${Date.now()}`,
-        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-        gameType: 'matching',
-        gameTitle: t.gameMatch,
-        accuracy,
-        responseTimeMs,
-        errors: finalErrors,
-        level: 1,
-        score: Math.min(95, Math.max(40, accuracy - finalErrors * 2)),
-        trend: accuracy >= 80 ? 'improving' : 'stable',
-        supportiveMessage:
-          language === 'as'
-            ? 'অফলাইনত সংৰক্ষিত। আপুনি সকলো ছবি অতি সুন্দৰভাৱে মিলালে!'
-            : language === 'hi'
-            ? 'ऑफ़लाइन सहेजा गया। आपने शांतिपूर्वक सभी चित्र जोड़े मिला लिए!'
-            : 'Saved offline. You paired the peaceful icons with great patience!',
-        synced: false,
-      };
-
-      setLatestAiFeedback({
-        score: fallbackSession.score || 80,
-        trend: fallbackSession.trend || 'stable',
-        message: fallbackSession.supportiveMessage || '',
-      });
-      setIsSubmitting(false);
-      setGameState('completed');
-      onSessionComplete(fallbackSession);
-      speakText(fallbackSession.supportiveMessage || '', language);
-      return;
-    }
-
-    try {
-      const res = await fetch('/api/gemini/cognitive-score', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          gameType: 'Picture Matching (Associative Memory)',
-          accuracy,
-          responseTimeMs,
-          errors: finalErrors,
-          level: 1,
-          language,
-        }),
-      });
-
-      const data = await res.json();
-      const session: GameSession = {
-        id: `sess-${Date.now()}`,
-        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-        gameType: 'matching',
-        gameTitle: t.gameMatch,
-        accuracy,
-        responseTimeMs,
-        errors: finalErrors,
-        level: 1,
-        score: data.score || 85,
-        trend: data.trend || 'stable',
-        supportiveMessage:
-          data.supportiveMessage ||
-          (language === 'as'
-            ? 'পৰিদৰ্শন আৰু স্মৃতি অতি চমৎকার হৈছে।'
-            : language === 'hi'
-            ? 'अवलोकन और स्मरण शक्ति बहुत सुंदर रही।'
-            : 'Wonderful visual recall session!'),
-        synced: true,
-      };
-
-      setLatestAiFeedback({
-        score: session.score || 85,
-        trend: session.trend || 'stable',
-        message: session.supportiveMessage || '',
-      });
-      setIsSubmitting(false);
-      setGameState('completed');
-      onSessionComplete(session);
-      speakText(session.supportiveMessage || '', language);
-    } catch (err) {
-      console.error(err);
-      const fallbackSession: GameSession = {
-        id: `sess-${Date.now()}`,
-        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-        gameType: 'matching',
-        gameTitle: t.gameMatch,
-        accuracy,
-        responseTimeMs,
-        errors: Math.max(0, finalMoves - 6),
-        level: 1,
-        score: Math.min(95, Math.max(30, accuracy)),
-        trend: accuracy >= 70 ? 'stable' : 'declining',
-        supportiveMessage: 'Saved safely on this device. Thank you for playing.',
-        synced: false,
-      };
-      setLatestAiFeedback({ score: fallbackSession.score, trend: fallbackSession.trend || 'stable', message: fallbackSession.supportiveMessage || '' });
-      setIsSubmitting(false);
-      setGameState('completed');
-      onSessionComplete(fallbackSession);
-    }
+    const session = await saveAndAssess({ id: crypto.randomUUID(), timestamp: new Date().toISOString(), gameType: 'matching', gameTitle: t.pictureMatchingTitle,
+      accuracy: Math.round(pairCount / finalMoves * 100), responseTimeMs: Math.round(measurements.current.responseMs / Math.max(1, measurements.current.turns)), errors: finalErrors, level, synced: false }, offlineMode, language, onSessionComplete);
+    setLatestAiFeedback({ score: session.score!, trend: choose(language,'Saved locally','स्थानीय रूप से सहेजा','স্থানীয়ভাৱে সংৰক্ষিত'), message: session.supportiveMessage! });
+    setIsSubmitting(false);
+    setGameState('completed');
   };
 
   const getIconComponent = (key: string) => {
@@ -285,7 +214,7 @@ export const PictureMatchingGame: React.FC<PictureMatchingGameProps> = ({
             {language === 'as' ? 'দৃষ্টি সম্পৰ্কীয় স্মৃতি' : language === 'hi' ? 'दृश्य साहचर्य स्मृति' : 'Visual Associative Memory'}
           </span>
           <h3 className="text-2xl font-bold text-[#2D2E2E] mt-2">
-            {t.gameMatch}
+            {t.pictureMatchingTitle}
           </h3>
           <p className="text-base text-[#73706A] mt-0.5">
             {language === 'as'
@@ -321,14 +250,14 @@ export const PictureMatchingGame: React.FC<PictureMatchingGameProps> = ({
             <Coffee className="w-8 h-8" />
           </div>
           <h4 className="text-xl font-bold text-[#2D2E2E] mb-2">
-            {language === 'as' ? 'শান্তিপূৰ্ণ ৬ টা ছবিৰ যোৰ মিলাওক' : language === 'hi' ? '६ सुंदर चित्रों के जोड़े मिलाएं' : 'Match the 6 Peaceful Pictures'}
+            {language === 'as' ? 'ছবিৰ যোৰ মিলাওক' : language === 'hi' ? 'चित्रों के जोड़े मिलाएं' : 'Match the Picture Pairs'}
           </h4>
           <p className="text-[#73706A] text-base sm:text-lg mb-6 leading-relaxed">
             {language === 'as'
-              ? '১২ খন কাৰ্ড ওলোটাই ৰখা আছে। কাৰ্ড এখন স্পৰ্শ কৰি ছবি চাওক আৰু তাৰ যোৰ বিচাৰক। কোনো লৰালৰি নাই।'
+              ? 'কাৰ্ড ওলোটাই ৰখা আছে। কাৰ্ড এখন স্পৰ্শ কৰি ছবি চাওক আৰু তাৰ যোৰ বিচাৰক। কোনো লৰালৰি নাই।'
               : language === 'hi'
-              ? '१२ कार्ड्स उल्टे रखे हैं। एक कार्ड छूकर चित्र देखें और उसका जोड़ा खोजें। आराम से खेलें।'
-              : 'There are 12 cards facing down. Tap a card to reveal its picture, then tap another to find its pair. Take all the time you need.'}
+              ? 'कार्ड्स उल्टे रखे हैं। एक कार्ड छूकर चित्र देखें और उसका जोड़ा खोजें। आराम से खेलें।'
+              : 'There are cards facing down. Tap a card to reveal its picture, then tap another to find its pair. Take all the time you need.'}
           </p>
           <button
             id="start-picture-matching-btn"
@@ -408,7 +337,7 @@ export const PictureMatchingGame: React.FC<PictureMatchingGameProps> = ({
           <div className="bg-[#FAF9F6] rounded-2xl p-6 border border-[#E5E1D8] text-center mb-6">
             <div className="inline-flex items-center gap-1.5 bg-[#F0F3EE] text-[#5C6E53] border border-[#D5DFD0] text-xs uppercase font-bold px-3 py-1 rounded-md mb-3">
               <Sparkles className="w-3.5 h-3.5 text-[#7C9070]" />
-              <span>{language === 'as' ? 'জেমিণি বৌদ্ধিক মূল্যাঙ্কন' : language === 'hi' ? 'जेमिनी संज्ञानात्मक मूल्यांकन' : 'Gemini Cognitive Assessment'}</span>
+              <span>{language === 'as' ? 'নথিভুক্ত খেলৰ ফলাফল' : language === 'hi' ? 'दर्ज खेल परिणाम' : 'Recorded game result'}</span>
             </div>
 
             <div className="flex items-center justify-center gap-2 my-2">

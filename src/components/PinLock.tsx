@@ -1,119 +1,32 @@
 import React, { useEffect, useState } from 'react';
-import { LockKeyhole, ShieldCheck } from 'lucide-react';
-
-const PIN_STORAGE_KEY = 'mm_pin_hash';
-
+import type { Language } from '../types';
+import { choose } from '../utils/activity';
 async function hashPin(pin: string) {
-  const bytes = new TextEncoder().encode(pin);
-  const digest = await crypto.subtle.digest('SHA-256', bytes);
-  return Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, '0')).join('');
+ const bytes = new TextEncoder().encode(pin);
+ const digest = await crypto.subtle.digest('SHA-256', bytes);
+ return Array.from(new Uint8Array(digest), byte => byte.toString(16).padStart(2,'0')).join('');
 }
-
-interface PinLockProps {
-  onUnlocked: () => void;
+export function PinLock({onUnlocked,language='en',onLanguageChange}: {onUnlocked:()=>void;language?:Language;onLanguageChange?:(language:Language)=>void}) {
+ const [savedHash,setSavedHash]=useState<string|null|undefined>();
+ const [pin,setPin]=useState(''), [confirm,setConfirm]=useState(''), [message,setMessage]=useState('');
+ useEffect(()=>{try {setSavedHash(localStorage.getItem('mm_pin_hash'));} catch {setMessage(choose(language,'Device storage is unavailable. Allow site storage to continue.','डिवाइस संग्रहण उपलब्ध नहीं है। जारी रखने के लिए साइट संग्रहण की अनुमति दें।','ডিভাইচৰ সংৰক্ষণ উপলব্ধ নহয়। আগবাঢ়িবলৈ ছাইট সংৰক্ষণৰ অনুমতি দিয়ক।'));}},[language]);
+ const isSetup=!savedHash;
+ const submit=async(event:React.FormEvent)=>{
+  event.preventDefault();
+  if(!/^\d{4,12}$/.test(pin)){setMessage(choose(language,'Use 4–12 digits.','4–12 अंक इस्तेमाल करें।','4–12 টা অংক ব্যৱহাৰ কৰক।'));return;}
+  try {
+   const hash=await hashPin(pin);
+   if(isSetup){if(pin!==confirm){setMessage(choose(language,'The PINs do not match.','PIN मेल नहीं खाते।','PIN দুটা মিলা নাই।'));return;}localStorage.setItem('mm_pin_hash',hash);onUnlocked();}
+   else if(hash===savedHash)onUnlocked();else {setMessage(choose(language,'That PIN is not correct.','PIN सही नहीं है।','PIN শুদ্ধ নহয়।'));setPin('');}
+  }catch {setMessage(choose(language,'Could not access secure device storage.','सुरक्षित डिवाइस संग्रहण उपलब्ध नहीं हुआ।','সুৰক্ষিত ডিভাইচ সংৰক্ষণ উপলব্ধ নহ’ল।'));}
+ };
+ return <main className="min-h-screen bg-[#FAF9F6] flex items-center justify-center p-5 text-[#2D2E2E]"><section className="w-full max-w-md bg-white border border-[#E5E1D8] rounded-3xl p-7 space-y-5">
+ <label className="block text-sm">{choose(language,'Language','भाषा','ভাষা')}<select aria-label="Language" value={language} onChange={e=>onLanguageChange?.(e.target.value as Language)} className="ml-3 border rounded-lg p-2"><option value="en">English</option><option value="hi">हिन्दी</option><option value="as">অসমীয়া</option></select></label>
+ <h1 className="text-2xl font-bold">{isSetup?choose(language,'Protect Memory Mate','Memory Mate सुरक्षित करें','Memory Mate সুৰক্ষিত কৰক'):choose(language,'Memory Mate is locked','Memory Mate लॉक है','Memory Mate লক কৰা আছে')}</h1>
+ <p>{choose(language,'Use a device PIN to control casual access.','सामान्य पहुँच नियंत्रित करने के लिए डिवाइस PIN रखें।','সাধাৰণ প্ৰৱেশ নিয়ন্ত্ৰণৰ বাবে ডিভাইচ PIN ব্যৱহাৰ কৰক।')}</p>
+ <form onSubmit={submit} className="space-y-4"><label className="block" htmlFor="memory-mate-pin">PIN (4–12)<input id="memory-mate-pin" type="password" inputMode="numeric" autoComplete={isSetup?'new-password':'current-password'} value={pin} onChange={e=>setPin(e.target.value.replace(/\D/g,''))} maxLength={12} required className="block w-full border rounded-xl p-3 mt-1"/></label>
+ {isSetup&&<label className="block" htmlFor="memory-mate-confirm-pin">{choose(language,'Confirm PIN','PIN की पुष्टि करें','PIN নিশ্চিত কৰক')}<input id="memory-mate-confirm-pin" type="password" inputMode="numeric" autoComplete="new-password" value={confirm} onChange={e=>setConfirm(e.target.value.replace(/\D/g,''))} maxLength={12} required className="block w-full border rounded-xl p-3 mt-1"/></label>}
+ {message&&<p role="alert">{message}</p>}<button type="submit" disabled={savedHash===undefined} className="w-full p-3 rounded-xl bg-[#58745E] text-white disabled:opacity-50">{isSetup?choose(language,'Create PIN and continue','PIN बनाकर जारी रखें','PIN তৈয়াৰ কৰি আগবাঢ়ক'):choose(language,'Unlock Memory Mate','Memory Mate खोलें','Memory Mate খোলক')}</button></form>
+ <p className="text-xs text-[#73706A]">{choose(language,'This PIN prevents casual access. The prototype stores records locally without encryption.','यह PIN सामान्य पहुँच रोकता है। प्रोटोटाइप रिकॉर्ड स्थानीय रूप से बिना एन्क्रिप्शन रखता है।','এই PIN সাধাৰণ প্ৰৱেশ বাধা দিয়ে। প্ৰটোটাইপে নথি এনক্ৰিপচন অবিহনে স্থানীয়ভাৱে ৰাখে।')}</p>
+ </section></main>;
 }
-
-export const PinLock: React.FC<PinLockProps> = ({ onUnlocked }) => {
-  const [savedHash, setSavedHash] = useState<string | null | undefined>(undefined);
-  const [pin, setPin] = useState('');
-  const [confirmPin, setConfirmPin] = useState('');
-  const [message, setMessage] = useState('');
-
-  useEffect(() => {
-    setSavedHash(localStorage.getItem(PIN_STORAGE_KEY));
-  }, []);
-
-  const handleSubmit = async (event: React.FormEvent) => {
-    event.preventDefault();
-    if (!/^\d{4,}$/.test(pin)) {
-      setMessage('Choose a PIN with at least 4 numbers.');
-      return;
-    }
-
-    const pinHash = await hashPin(pin);
-    if (!savedHash) {
-      if (pin !== confirmPin) {
-        setMessage('The PINs do not match. Please try again.');
-        return;
-      }
-      localStorage.setItem(PIN_STORAGE_KEY, pinHash);
-      onUnlocked();
-      return;
-    }
-
-    if (pinHash === savedHash) {
-      onUnlocked();
-      return;
-    }
-    setMessage('That PIN is not correct. Please try again.');
-    setPin('');
-  };
-
-  if (savedHash === undefined) return null;
-  const isSetup = !savedHash;
-
-  return (
-    <main className="min-h-screen bg-[#FAF9F6] flex items-center justify-center p-5 text-[#2D2E2E]">
-      <section className="w-full max-w-md bg-white border border-[#E5E1D8] rounded-3xl shadow-sm p-7 sm:p-9">
-        <div className="w-14 h-14 rounded-2xl bg-[#F0F3EE] text-[#5C6E53] flex items-center justify-center mb-5">
-          <LockKeyhole className="w-7 h-7" />
-        </div>
-        <h1 className="text-2xl font-bold">{isSetup ? 'Protect Memory Mate' : 'Memory Mate is locked'}</h1>
-        <p className="text-sm text-[#73706A] mt-2 leading-6">
-          {isSetup
-            ? 'Create a device PIN to keep patient information private when this app is opened.'
-            : 'Enter your device PIN to access patient information.'}
-        </p>
-
-        <form onSubmit={handleSubmit} className="mt-6 space-y-4">
-          <div>
-            <label htmlFor="memory-mate-pin" className="block text-sm font-semibold mb-1.5">PIN</label>
-            <p id="memory-mate-pin-help" className="text-xs text-[#73706A] mb-2">Enter 4 or more numbers, for example: 1234</p>
-            <input
-              id="memory-mate-pin"
-              type="password"
-              inputMode="numeric"
-              pattern="[0-9]*"
-              autoComplete={isSetup ? 'new-password' : 'current-password'}
-              value={pin}
-              onChange={(event) => setPin(event.target.value.replace(/\D/g, ''))}
-              aria-describedby="memory-mate-pin-help"
-              className="w-full rounded-xl border border-[#D5DFD0] px-4 py-3 text-lg tracking-[0.2em] outline-none focus:border-[#7C9070]"
-              maxLength={12}
-              required
-              autoFocus
-            />
-          </div>
-          {isSetup && (
-            <div>
-              <label htmlFor="memory-mate-confirm-pin" className="block text-sm font-semibold mb-1.5">Confirm PIN</label>
-              <p id="memory-mate-confirm-pin-help" className="text-xs text-[#73706A] mb-2">Enter the same numbers again</p>
-              <input
-                id="memory-mate-confirm-pin"
-                type="password"
-                inputMode="numeric"
-                pattern="[0-9]*"
-                autoComplete="new-password"
-                value={confirmPin}
-                onChange={(event) => setConfirmPin(event.target.value.replace(/\D/g, ''))}
-                aria-describedby="memory-mate-confirm-pin-help"
-                className="w-full rounded-xl border border-[#D5DFD0] px-4 py-3 text-lg tracking-[0.2em] outline-none focus:border-[#7C9070]"
-                maxLength={12}
-                required
-              />
-            </div>
-          )}
-          {message && <p role="alert" className="text-sm text-[#A44A3F]">{message}</p>}
-          <button type="submit" className="w-full rounded-xl bg-[#7C9070] hover:bg-[#687A5E] py-3 text-white font-bold transition-colors">
-            {isSetup ? 'Create PIN and continue' : 'Unlock Memory Mate'}
-          </button>
-        </form>
-
-        <p className="mt-5 flex gap-2 text-xs leading-5 text-[#73706A]">
-          <ShieldCheck className="w-4 h-4 shrink-0 text-[#7C9070] mt-0.5" />
-          This PIN prevents casual access on this device. Data is stored locally and is not encrypted by this demo app.
-        </p>
-      </section>
-    </main>
-  );
-};

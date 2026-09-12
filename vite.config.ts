@@ -1,22 +1,21 @@
 import tailwindcss from '@tailwindcss/vite';
 import react from '@vitejs/plugin-react';
-import path from 'path';
-import {defineConfig} from 'vite';
-
-export default defineConfig(() => {
-  return {
-    plugins: [react(), tailwindcss()],
-    resolve: {
-      alias: {
-        '@': path.resolve(__dirname, '.'),
-      },
+import path from 'node:path';
+import { readFileSync, readdirSync, writeFileSync } from 'node:fs';
+import { createHash } from 'node:crypto';
+import { defineConfig } from 'vite';
+export default defineConfig({
+  plugins: [react(), tailwindcss(), {
+    name: 'memory-mate-offline-assets',
+    apply: 'build',
+    closeBundle() {
+      const assets = readdirSync('dist/assets').filter(name => /\.(js|css|woff2?|png|svg)$/.test(name)).map(name => `/assets/${name}`);
+      const precache = ['/', '/index.html', '/manifest.webmanifest', '/memory-mate.svg', ...assets];
+      const hash = createHash('sha256').update(readFileSync('dist/index.html')).update(JSON.stringify(assets)).digest('hex').slice(0,12);
+      const source = readFileSync('public/sw.js','utf8').replace(/const PRECACHE = .*;/, `const PRECACHE = ${JSON.stringify(precache)};`).replace('memory-mate-build', `memory-mate-${hash}`);
+      writeFileSync('dist/sw.js', source);
     },
-    server: {
-      // HMR is disabled in AI Studio via DISABLE_HMR env var.
-      // Do not modifyâfile watching is disabled to prevent flickering during agent edits.
-      hmr: process.env.DISABLE_HMR !== 'true',
-      // Disable file watching when DISABLE_HMR is true to save CPU during agent edits.
-      watch: process.env.DISABLE_HMR === 'true' ? null : {},
-    },
-  };
+  }],
+  resolve: { alias: { '@': path.resolve(__dirname, '.') } },
+  server: { hmr: process.env.DISABLE_HMR !== 'true', watch: process.env.DISABLE_HMR === 'true' ? null : {} },
 });

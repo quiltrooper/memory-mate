@@ -1,3 +1,5 @@
+import { choose } from '../../../utils/activity';
+import { useVoiceInput } from '../../../hooks/useVoiceInput';
 import React, { useState, useRef, useEffect } from 'react';
 import { Send, Image as ImageIcon, Volume2, Mic, Sparkles, UserCheck, Plus, X, Heart, Shield } from 'lucide-react';
 import { ChatMessage, KnownFace, Reminder, PatientProfile, Language } from '../../../types';
@@ -11,6 +13,7 @@ interface MemoryAssistantProps {
   onAddKnownFace: (face: KnownFace) => void;
   language: Language;
   largeText: boolean;
+  offlineMode?: boolean;
 }
 
 export const MemoryAssistant: React.FC<MemoryAssistantProps> = ({
@@ -20,6 +23,7 @@ export const MemoryAssistant: React.FC<MemoryAssistantProps> = ({
   onAddKnownFace,
   language,
   largeText,
+  offlineMode = false,
 }) => {
   const t = TRANSLATIONS[language];
 
@@ -32,6 +36,7 @@ export const MemoryAssistant: React.FC<MemoryAssistantProps> = ({
     },
   ]);
   const [inputText, setInputText] = useState('');
+  const voice = useVoiceInput(language, setInputText, offlineMode || !navigator.onLine);
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
   const [isTyping, setIsTyping] = useState(false);
   const [showAddFaceModal, setShowAddFaceModal] = useState(false);
@@ -69,7 +74,7 @@ export const MemoryAssistant: React.FC<MemoryAssistantProps> = ({
     const text = textToSend ?? inputText;
     const img = imageToSend ?? selectedImage;
 
-    if (!text.trim() && !img) return;
+    if (isTyping || (!text.trim() && !img)) return;
 
     const userMsg: ChatMessage = {
       id: `msg-${Date.now()}`,
@@ -85,7 +90,9 @@ export const MemoryAssistant: React.FC<MemoryAssistantProps> = ({
     setIsTyping(true);
 
     try {
+      if (offlineMode || !navigator.onLine) throw new Error('Offline');
       const res = await fetch('/api/gemini/chat', {
+        signal: AbortSignal.timeout(15000),
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -102,7 +109,8 @@ export const MemoryAssistant: React.FC<MemoryAssistantProps> = ({
         }),
       });
       const data = await res.json();
-      const replyText = data.reply || (language === 'as' ? 'মই আপোনাৰ লগতেই আছোঁ। আপুনি সম্পূৰ্ণ শান্তিপূৰ্ণভাৱে বিশ্ৰাম লওক।' : language === 'hi' ? 'मैं आपके साथ हूँ। आप निश्चिंत और सुरक्षित हैं।' : 'I am right here with you. Take a gentle breath. Everything is peaceful and well.');
+      if (!res.ok || data.source !== 'gemini' || typeof data.reply !== 'string') throw new Error('AI unavailable');
+      const replyText = data.reply;
 
       setMessages((prev) => [
         ...prev,
@@ -116,12 +124,11 @@ export const MemoryAssistant: React.FC<MemoryAssistantProps> = ({
       speakText(replyText, language);
     } catch (err) {
       console.error(err);
-      const fallback =
-        language === 'as'
-          ? 'মই আপোনাৰ লগতেই আছোঁ। আপুনি সম্পূৰ্ণ সুৰক্ষিত আৰু আপোন মানুহৰ মাজত আছে।'
-          : language === 'hi'
-          ? 'मैं आपके साथ हूँ। आप अपनों के बीच बिल्कुल सुरक्षित हैं।'
-          : 'I am right here with you. Everything is calm and safe.';
+      const savedReminders = reminders.filter(r => !r.completed).map(r => `${r.time}: ${r.title}`).join('; ');
+      const fallback = choose(language,
+        `AI is unavailable. Saved reminders: ${savedReminders || 'No pending reminders are recorded.'} You can also open your labeled family photos and Memory Box.`,
+        `AI उपलब्ध नहीं है। सहेजे गए अनुस्मारक: ${savedReminders || 'कोई लंबित अनुस्मारक दर्ज नहीं है।'} आप नाम वाली पारिवारिक तस्वीरें और स्मृति बॉक्स खोल सकते हैं।`,
+        `AI উপলব্ধ নহয়। সংৰক্ষিত সোঁৱৰণি: ${savedReminders || 'বাকী সোঁৱৰণি নথিভুক্ত নাই।'} আপুনি নামযুক্ত পৰিয়ালৰ ছবি আৰু স্মৃতি বাকচ খুলিব পাৰে।`);
       setMessages((prev) => [
         ...prev,
         {
@@ -149,14 +156,9 @@ export const MemoryAssistant: React.FC<MemoryAssistantProps> = ({
   };
 
   const selectSampleFace = (face: KnownFace) => {
-    setSelectedImage(face.photoUrl);
-    const askMsg =
-      language === 'as'
-        ? `এই ফটোখনত কোন আছে মোক কওক?`
-        : language === 'hi'
-        ? `इस फ़ोटो में कौन हैं मुझे बताएं?`
-        : `Who is this in this photo?`;
-    handleSendMessage(askMsg, face.photoUrl);
+    const text = choose(language, `Saved photo label: ${face.name}. Relationship: ${face.relationship}. ${face.notes}`, `सहेजी गई तस्वीर का नाम: ${face.name}। संबंध: ${face.relationship}। ${face.notes}`, `সংৰক্ষিত ছবিৰ নাম: ${face.name}। সম্পৰ্ক: ${face.relationship}। ${face.notes}`);
+    setMessages(previous => [...previous, {id: crypto.randomUUID(), sender:'assistant', text, timestamp: new Date().toLocaleTimeString(), imagePreview: face.photoUrl}]);
+    speakText(text, language);
   };
 
   const handleSaveNewFace = (e: React.FormEvent) => {
@@ -169,7 +171,7 @@ export const MemoryAssistant: React.FC<MemoryAssistantProps> = ({
       relationship: newFaceRel,
       location: patientProfile.location.split(',')[0],
       notes: newFaceNotes || 'Beloved family member.',
-      photoUrl: newFacePhoto || 'https://images.unsplash.com/photo-1544005313-94ddf0286df2?w=500&auto=format&fit=crop&q=80',
+      photoUrl: newFacePhoto || '/memory-mate.svg',
     };
 
     onAddKnownFace(newFace);
@@ -424,17 +426,10 @@ export const MemoryAssistant: React.FC<MemoryAssistantProps> = ({
           <button
             id="chat-voice-btn"
             type="button"
-            onClick={() => {
-              const voicePrompt =
-                language === 'as'
-                  ? 'মই শুনি আছোঁ। মোক আজিৰ কামৰ বিষয়ে সোধক বা ফটো দেখুৱাওক।'
-                  : language === 'hi'
-                  ? 'मैं सुन रहा हूँ। मुझसे आज के कार्यों के बारे में पूछें या फ़ोटो दिखाएं।'
-                  : 'I am listening. Ask me what you need to do today, or show me a photo.';
-              speakText(voicePrompt, language);
-              setInputText(t.q1);
-            }}
-            title={t.voiceGuidance}
+            onClick={voice.toggle}
+            aria-label={voice.listening ? choose(language,'Stop listening','सुनना रोकें','শুনা বন্ধ কৰক') : choose(language,'Speak your question','अपना प्रश्न बोलें','প্ৰশ্ন কওক')}
+            aria-pressed={voice.listening}
+            title={choose(language,'Voice input; availability depends on browser and language','आवाज़ से लिखें; उपलब्धता ब्राउज़र और भाषा पर निर्भर है','মাতৰ ইনপুট; উপলব্ধতা ব্ৰাউজাৰ আৰু ভাষাৰ ওপৰত নিৰ্ভৰশীল')}
             className="h-12 w-12 rounded-xl bg-[#FAF9F6] hover:bg-[#F0F3EE] text-[#73706A] border border-[#E5E1D8] flex items-center justify-center shrink-0 transition-colors"
           >
             <Mic className="w-5 h-5 text-[#73706A]" />
@@ -444,13 +439,14 @@ export const MemoryAssistant: React.FC<MemoryAssistantProps> = ({
           <button
             id="chat-send-btn"
             type="submit"
-            disabled={!inputText.trim() && !selectedImage}
+            disabled={isTyping || (!inputText.trim() && !selectedImage)}
             className="h-12 px-5 bg-[#7C9070] hover:bg-[#687A5E] disabled:bg-[#E5E1D8] disabled:text-[#73706A] text-white font-semibold rounded-xl flex items-center justify-center gap-2 transition-colors shrink-0 shadow-xs"
           >
             <Send className="w-5 h-5" />
             <span className="hidden sm:inline">{t.send}</span>
           </button>
         </form>
+        <p role="status" className="text-xs mt-2 text-[#73706A]">{voice.message || choose(language, "Microphone input may need internet and browser permission. You can always type.", "माइक्रोफ़ोन के लिए इंटरनेट और ब्राउज़र अनुमति लग सकती है। आप टाइप कर सकते हैं।", "মাইক্ৰফোনৰ বাবে ইণ্টাৰনেট আৰু ব্ৰাউজাৰৰ অনুমতি লাগিব পাৰে। আপুনি লিখিব পাৰে।")}</p>
       </div>
 
       {/* Teach New Face Modal */}

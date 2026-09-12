@@ -15,6 +15,10 @@ export interface GameSession {
   trend?: CognitiveTrend;
   supportiveMessage?: string;
   synced: boolean;
+  dataSource?: 'recorded' | 'demo' | 'legacy';
+  metricVersion?: number;
+  scoreSource?: 'local';
+  feedbackSource?: 'gemini';
 }
 
 export type ReminderCategory = 'medication' | 'meal' | 'appointment' | 'routine';
@@ -71,6 +75,7 @@ export interface PatientProfile {
 }
 
 export interface PatientDataset {
+  dataSource?: 'demo' | 'user' | 'legacy';
   profile: PatientProfile;
   reminders: Reminder[];
   memories: MemoryItem[];

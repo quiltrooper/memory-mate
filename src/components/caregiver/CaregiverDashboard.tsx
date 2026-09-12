@@ -1,4 +1,5 @@
-import React, { useState, useMemo } from 'react';
+import { activitySummary, choose, sessionTime, recentSessions, isRecorded } from '../../utils/activity';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
 import {
   PatientProfile,
   Reminder,
@@ -52,23 +53,20 @@ export const CaregiverDashboard: React.FC<CaregiverDashboardProps> = ({
   onUpdateReminder,
   onDeleteReminder,
   gameSessions,
-  language = 'en',
+  language = 'en' as Language,
   patients = [],
   activePatientId = patientProfile.id,
   onSelectPatient,
   onAddPatientDataset,
 }) => {
   const t = TRANSLATIONS[language];
-  const [flags, setFlags] = useState<string[]>([
-    'Word Recall accuracy dipped 14% this week during late evening — consider shifting cognitive tasks to calmer morning hours.',
-    'Visual memory & Pattern recognition remained high and stable at 84%, demonstrating resilient visual working memory.',
-    'Morning medication adherence was 100%; evening routine completed with family assistance.',
-  ]);
-
-  const [weeklySummary, setWeeklySummary] = useState<string>(
-    `${patientProfile.name} had a reassuring and active week overall. Visual memory and daily routine participation remained very stable, especially during morning hours. We noticed a slight fatigue pattern during late-afternoon memory recall, so shifting cognitive games to 10:00 AM will provide the gentlest and most encouraging experience.`
-  );
-
+  const facts = useMemo(() => activitySummary(gameSessions, reminders, language), [gameSessions, reminders, language]);
+  const [aiSummary, setAiSummary] = useState<{key: string; text: string} | null>(null);
+  const factsKey = JSON.stringify([patientProfile.id, language, facts]);
+  const factsRef = useRef(factsKey); factsRef.current = factsKey;
+  const flags = facts.flags;
+  const weeklySummary = aiSummary?.key === factsKey ? aiSummary.text : facts.weeklySummary;
+  const [analysisError, setAnalysisError] = useState('');
   // Custom-trained logistic regression risk classifier — independent of
   // Gemini. Runs entirely client-side on the last 5 game sessions.
   const riskPrediction = useMemo(() => predictRisk(gameSessions, 5), [gameSessions]);
@@ -82,39 +80,23 @@ export const CaregiverDashboard: React.FC<CaregiverDashboardProps> = ({
   const [newAge, setNewAge] = useState('70');
   const [newGender, setNewGender] = useState<'Male' | 'Female' | 'Other'>('Female');
   const [newLocation, setNewLocation] = useState('Guwahati, Assam');
-  const [newDiagnosis, setNewDiagnosis] = useState('Mild Cognitive Impairment');
+  const [newDiagnosis, setNewDiagnosis] = useState('Not provided');
   const [newCaregiver, setNewCaregiver] = useState('Family Caregiver');
   const [newAsha, setNewAsha] = useState('Community ASHA Health Worker');
   const [newHospital, setNewHospital] = useState('District Civil Hospital');
   const [newNotes, setNewNotes] = useState('');
 
   const handleRunAiAnalysis = async () => {
-    setIsAnalyzing(true);
+    if (isAnalyzing) return;
+    setIsAnalyzing(true); setAnalysisError('');
+    const key = factsKey;
     try {
-      const res = await fetch('/api/gemini/caregiver-analysis', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          trendData,
-          patientProfile,
-          recentLogs: gameSessions.slice(0, 5),
-          language,
-        }),
-      });
-
-      const data = await res.json();
-      if (data.flags && data.flags.length > 0) {
-        setFlags(data.flags);
-      }
-      if (data.weeklySummary) {
-        setWeeklySummary(data.weeklySummary);
-      }
-      setIsAnalyzing(false);
-      speakText('Updated clinical assessment and weekly summary with Gemini.', language);
-    } catch (err) {
-      console.error(err);
-      setIsAnalyzing(false);
-    }
+      const response = await fetch('/api/gemini/caregiver-analysis', {method:'POST', headers:{'Content-Type':'application/json'}, signal: AbortSignal.timeout(15000), body:JSON.stringify({facts: facts.flags, language})});
+      const data = await response.json();
+      if (!response.ok || data.source !== 'gemini' || typeof data.weeklySummary !== 'string') throw new Error('Unavailable');
+      if (factsRef.current === key) setAiSummary({key, text:data.weeklySummary});
+    } catch { setAnalysisError(choose(language, 'AI unavailable. The summary below uses measured local activity.', 'AI उपलब्ध नहीं है। नीचे का सारांश स्थानीय मापों पर आधारित है।', 'AI উপলব্ধ নহয়। তলৰ সাৰাংশ স্থানীয় মাপৰ ওপৰত ভিত্তি কৰি তৈয়াৰ।')); }
+    finally { setIsAnalyzing(false); }
   };
 
   const handleExportTrainingData = () => {
@@ -123,7 +105,7 @@ export const CaregiverDashboard: React.FC<CaregiverDashboardProps> = ({
       platform: 'Memory Mate Dementia Cognitive Care',
       patientDataset: {
         id: patientProfile.id,
-        anonymizedCode: `SUBJ-${patientProfile.id.toUpperCase()}`,
+        profileCode: `SUBJ-${patientProfile.id.toUpperCase()}`,
         age: patientProfile.age,
         gender: patientProfile.gender,
         diagnosis: patientProfile.diagnosis,
@@ -132,13 +114,15 @@ export const CaregiverDashboard: React.FC<CaregiverDashboardProps> = ({
         gameSessionsLogs: gameSessions.map((s) => ({
           sessionId: s.id,
           timestamp: s.timestamp,
+          dataSource: s.dataSource ?? 'legacy',
+          metricVersion: s.metricVersion ?? 1,
           gameType: s.gameType,
           accuracyPercent: s.accuracy,
           averageLatencyMs: s.responseTimeMs,
           errorCount: s.errors,
           adaptiveLevel: s.level,
-          geminiScore: s.score,
-          clinicalTrend: s.trend,
+          measuredScore: s.metricVersion === 2 ? s.accuracy : null,
+          legacyTrend: s.trend,
         })),
         activeRemindersCount: reminders.length,
         completionAdherenceRate: Math.round(
@@ -161,10 +145,10 @@ export const CaregiverDashboard: React.FC<CaregiverDashboardProps> = ({
     const bulkExport = {
       exportedAt: new Date().toISOString(),
       platform: 'Memory Mate Dementia Cognitive Care',
-      datasetType: 'Synthetic + Demo — Northeast India Longitudinal Cognitive Dataset',
+      datasetType: 'Mixed records: inspect dataSource on every session; legacy dates are unverified',
       totalPatients: patients.length,
       patients: patients.map((p) => ({
-        anonymizedCode: `SUBJ-${p.profile.id.toUpperCase()}`,
+        profileCode: `SUBJ-${p.profile.id.toUpperCase()}`,
         age: p.profile.age,
         gender: p.profile.gender,
         diagnosis: p.profile.diagnosis,
@@ -173,13 +157,15 @@ export const CaregiverDashboard: React.FC<CaregiverDashboardProps> = ({
         gameSessionsLogs: p.gameSessions.map((s) => ({
           sessionId: s.id,
           timestamp: s.timestamp,
+          dataSource: s.dataSource ?? 'legacy',
+          metricVersion: s.metricVersion ?? 1,
           gameType: s.gameType,
           accuracyPercent: s.accuracy,
           averageLatencyMs: s.responseTimeMs,
           errorCount: s.errors,
           adaptiveLevel: s.level,
-          geminiScore: s.score,
-          clinicalTrend: s.trend,
+          measuredScore: s.metricVersion === 2 ? s.accuracy : null,
+          legacyTrend: s.trend,
         })),
       })),
     };
@@ -214,42 +200,10 @@ export const CaregiverDashboard: React.FC<CaregiverDashboardProps> = ({
 
     const newDataset: PatientDataset = {
       profile: newProfile,
-      knownFaces: [
-        {
-          id: `face-${Date.now()}-1`,
-          name: newCaregiver.trim(),
-          relationship: 'Primary Caregiver',
-          location: newLocation.trim(),
-          notes: 'Loving family support and daily care.',
-          photoUrl: 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=500&auto=format&fit=crop&q=80',
-        },
-      ],
-      reminders: [
-        {
-          id: `rem-${Date.now()}-1`,
-          title: 'Morning Medicine & Warm Water',
-          time: '08:30 AM',
-          category: 'medication',
-          completed: false,
-          notes: 'Take with care after breakfast.',
-          assignedBy: newCaregiver.trim(),
-        },
-      ],
-      memories: [
-        {
-          id: `mem-${Date.now()}-1`,
-          title: 'Family Courtyard Gathering',
-          dateOrEra: 'Recent memory',
-          location: newLocation.trim(),
-          caption: 'Smiling with beloved family on a peaceful afternoon.',
-          imageUrl: 'https://images.unsplash.com/photo-1544735716-392fe2489ffa?w=600&auto=format&fit=crop&q=80',
-          createdAt: new Date().toISOString().split('T')[0],
-        },
-      ],
-      trendData: [
-        { week: 'W1', memory: 75, attention: 78, executive: 74, composite: 76 },
-        { week: 'W2', memory: 78, attention: 80, executive: 76, composite: 78 },
-      ],
+      knownFaces: [],
+      reminders: [],
+      memories: [],
+      trendData: [],
       gameSessions: [],
     };
 
@@ -283,7 +237,7 @@ export const CaregiverDashboard: React.FC<CaregiverDashboardProps> = ({
                   {patients.length} {language === 'as' ? 'ৰোগী' : language === 'hi' ? 'रोगी' : 'profiles'}
                 </span>
                 <span className="text-xs bg-[#FDF3E7] text-[#8C5E28] font-semibold px-2 py-0.5 rounded-md border border-[#F0DDBB]">
-                  {language === 'as' ? 'ডেম’ ডাটা' : language === 'hi' ? 'डेमो डेटा' : 'Demo data'}
+                  {choose(language, 'Local records', 'स्थानीय रिकॉर्ड', 'স্থানীয় নথি')}
                 </span>
               </div>
               <p className="text-xs text-[#73706A]">
@@ -358,7 +312,7 @@ export const CaregiverDashboard: React.FC<CaregiverDashboardProps> = ({
       <div className="bg-[#FAF6F0] text-[#2D2D2D] rounded-[28px] p-6 sm:p-8 border border-[#E8E2D9] shadow-[0_8px_24px_rgba(67,63,57,0.05)] relative overflow-hidden">
         <div className="relative z-10">
           <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6">
-            
+
             {/* Patient Details */}
             <div>
               <div className="inline-flex items-center gap-2 bg-[#EDF2EE] px-3 py-1 rounded-full text-xs font-semibold mb-2 border border-[#D5DFD0] text-[#58745E]">
@@ -389,7 +343,7 @@ export const CaregiverDashboard: React.FC<CaregiverDashboardProps> = ({
                         ? 'bg-[#FDF6ED] text-[#8C5E28] border-[#E8D4BE]'
                         : 'bg-[#F0F3EE] text-[#5C6E53] border-[#D5DFD0]'
                     }`}
-                    title={`Custom logistic regression model confidence: ${(riskPrediction.confidence * 100).toFixed(0)}%`}
+                    title={`Synthetic prototype class probability (not validated confidence): ${(riskPrediction.confidence * 100).toFixed(0)}%`}
                   >
                     <span
                       className={`w-2 h-2 rounded-full ${
@@ -408,7 +362,7 @@ export const CaregiverDashboard: React.FC<CaregiverDashboardProps> = ({
                         : `Support signal: ${riskPrediction.label}`}
                     </span>
                     <span className="opacity-70 font-semibold">
-                      ({(riskPrediction.confidence * 100).toFixed(0)}%)
+
                     </span>
                   </div>
                   <p className="text-[11px] text-[#5C5C5C] mt-1.5 max-w-md">
@@ -484,6 +438,7 @@ export const CaregiverDashboard: React.FC<CaregiverDashboardProps> = ({
       </div>
 
       <CareSummary
+        language={language}
         gameSessions={gameSessions}
         reminders={reminders}
         riskPrediction={riskPrediction}
@@ -492,7 +447,7 @@ export const CaregiverDashboard: React.FC<CaregiverDashboardProps> = ({
 
       {/* AI Concerns Panel & Weekly Summary (2 Columns) */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        
+
         {/* 1. AI-Flagged Concerns Panel */}
         <div id="ai-concerns-panel" className="bg-white rounded-2xl p-6 border border-[#E5E1D8] shadow-xs flex flex-col justify-between space-y-4">
           <div>
@@ -503,10 +458,10 @@ export const CaregiverDashboard: React.FC<CaregiverDashboardProps> = ({
                 </div>
                 <div>
                   <h3 className="font-bold text-[#2D2E2E] text-lg">
-                    {language === 'as' ? 'এআই চিহ্নিত স্বাস্থ্য নিৰীক্ষণ' : language === 'hi' ? 'एआई-चिह्नित स्वास्थ्य निगरानी' : 'AI-Flagged Clinical Concerns'}
+                    {language === 'as' ? 'নথিভুক্ত কাৰ্যকলাপৰ পৰ্যবেক্ষণ' : language === 'hi' ? 'दर्ज गतिविधि अवलोकन' : 'Recorded Activity Observations'}
                   </h3>
                   <p className="text-xs text-[#73706A]">
-                    {language === 'as' ? 'জ্ঞানীয় নম্বৰ আৰু খেলৰ তথ্যৰ জেমিনি বিশ্লেষণ' : language === 'hi' ? 'संज्ञानात्मक स्कोर व खेलों का जेमिनी विश्लेषण' : 'Gemini analysis of recent cognitive scores & game logs'}
+                    {language === 'as' ? 'এই প্ৰফাইলৰ নথিভুক্ত কাৰ্যকলাপৰ পৰা গণনা কৰা' : language === 'hi' ? 'इस प्रोफ़ाइल की दर्ज गतिविधि से गणना' : 'Calculated from this profile’s recorded activity'}
                   </p>
                 </div>
               </div>
@@ -551,27 +506,27 @@ export const CaregiverDashboard: React.FC<CaregiverDashboardProps> = ({
                 </div>
                 <div>
                   <h3 className="font-bold text-[#2D2E2E] text-lg">
-                    {language === 'as' ? 'সাপ্তাহিক পৰিয়াল আৰু চিকিৎসক প্ৰতিবেদন' : language === 'hi' ? 'साप्ताहिक परिवार व चिकित्सक सारांश' : 'Weekly Family & Clinician Summary'}
+                    {language === 'as' ? 'সাপ্তাহিক পৰিয়াল আৰু চিকিৎসক প্ৰতিবেদন' : language === 'hi' ? 'साप्ताहिक परिवार व चिकित्सक सारांश' : 'Family Activity Summary'}
                   </h3>
                   <p className="text-xs text-[#73706A]">
-                    {language === 'as' ? 'পৰিয়াল আৰু স্বাস্থ্যকৰ্মীৰ বাবে জেমিনি দ্বাৰা প্ৰস্তুত' : language === 'hi' ? 'परिवार व स्वास्थ्य कार्यकर्ताओं हेतु जेमिनी द्वारा निर्मित' : 'Auto-generated by Gemini for family and healthcare volunteers'}
+                    {language === 'as' ? 'স্থানীয় মাপৰ তথ্য; ঐচ্ছিক AI ভাষা' : language === 'hi' ? 'स्थानीय माप के तथ्य; वैकल्पिक AI शब्दांकन' : 'Measured local facts; optional AI wording'}
                   </p>
                 </div>
               </div>
 
               <div className="inline-flex items-center gap-1 text-xs font-semibold bg-[#F0F3EE] text-[#5C6E53] border border-[#D5DFD0] px-2.5 py-1 rounded-md">
                 <Sparkles className="w-3.5 h-3.5 text-[#7C9070]" />
-                <span>Gemini Powered</span>
+                <span>{choose(language, 'Local facts', 'स्थानीय तथ्य', 'স্থানীয় তথ্য')}</span>
               </div>
             </div>
 
             <div className="bg-[#FAF9F6] rounded-xl p-4 border border-[#E5E1D8] text-[#2D2E2E] text-sm sm:text-base leading-relaxed space-y-3 font-normal">
-              <p>{weeklySummary}</p>
+              <p>{weeklySummary}</p>{analysisError && <p role="status" className="mt-3 text-amber-800">{analysisError}</p>}
             </div>
           </div>
 
           <div className="flex items-center justify-between pt-2 border-t border-[#E5E1D8] text-xs">
-            <span className="text-[#73706A]">Week 9 longitudinal cycle</span>
+            <span className="text-[#73706A]">{choose(language, 'Based on recorded activity', 'दर्ज गतिविधि पर आधारित', 'নথিভুক্ত কাৰ্যকলাপৰ ভিত্তিত')}</span>
             <button
               type="button"
               onClick={handleRunAiAnalysis}
@@ -586,10 +541,13 @@ export const CaregiverDashboard: React.FC<CaregiverDashboardProps> = ({
       </div>
 
       {/* 8-Week Longitudinal Cognitive Trend Chart */}
-      <CognitiveTrendChart data={trendData} />
+      <CognitiveTrendChart data={trendData} sessions={gameSessions} language={language} />
 
       {/* Reminder & Medicine Prescription Management */}
       <CaregiverReminders
+        language={language}
+        caregiverName={patientProfile.primaryCaregiver}
+        workerName={patientProfile.ashaWorker}
         reminders={reminders}
         onAddReminder={onAddReminder}
         onUpdateReminder={onUpdateReminder}
@@ -621,7 +579,7 @@ export const CaregiverDashboard: React.FC<CaregiverDashboardProps> = ({
                 <th className="pb-3">{language === 'as' ? 'সঠিকতা' : language === 'hi' ? 'सटीकता' : 'Accuracy'}</th>
                 <th className="pb-3">{language === 'as' ? 'গতি' : language === 'hi' ? 'गति' : 'Avg Latency'}</th>
                 <th className="pb-3">{language === 'as' ? 'ভুল' : language === 'hi' ? 'भूल' : 'Errors'}</th>
-                <th className="pb-3">{language === 'as' ? 'এআই স্কোৰ' : language === 'hi' ? 'एआई स्कोर' : 'AI Score'}</th>
+                <th className="pb-3">{language === 'as' ? 'জোখা নম্বৰ' : language === 'hi' ? 'मापा स्कोर' : 'Measured score'}</th>
                 <th className="pb-3">{language === 'as' ? 'গতিধাৰা' : language === 'hi' ? 'प्रवृत्ति' : 'Trend'}</th>
                 <th className="pb-3 pr-2 text-right">{language === 'as' ? 'স্থিতি' : language === 'hi' ? 'स्थिति' : 'Sync Status'}</th>
               </tr>
@@ -630,7 +588,7 @@ export const CaregiverDashboard: React.FC<CaregiverDashboardProps> = ({
               {gameSessions.map((sess) => (
                 <tr key={sess.id} className="hover:bg-[#FAF9F6] transition-colors">
                   <td className="py-3 pl-2 text-[#73706A] font-medium whitespace-nowrap">
-                    {sess.timestamp}
+                    {sessionTime(sess.timestamp, language)}<span className="block text-xs">{sess.dataSource === 'recorded' ? choose(language,'Recorded','दर्ज','নথিভুক্ত') : choose(language,'Demo / legacy','प्रदर्शन / पुराना','প্ৰদৰ্শন / পুৰণি')}</span>
                   </td>
                   <td className="py-3 font-semibold text-[#2D2E2E]">
                     {sess.gameTitle}
@@ -645,7 +603,7 @@ export const CaregiverDashboard: React.FC<CaregiverDashboardProps> = ({
                     {sess.errors}
                   </td>
                   <td className="py-3 font-bold text-[#7C9070]">
-                    {sess.score ?? sess.accuracy} / 100
+                    {sess.metricVersion === 2 ? `${sess.accuracy} / 100` : choose(language,'Legacy score','पुराना स्कोर','পুৰণি নম্বৰ')}
                   </td>
                   <td className="py-3 capitalize text-xs font-semibold">
                     <span
@@ -657,14 +615,14 @@ export const CaregiverDashboard: React.FC<CaregiverDashboardProps> = ({
                           : 'bg-[#F5F3EF] text-[#73706A] border-[#E5E1D8]'
                       }`}
                     >
-                      {sess.trend || 'stable'}
+                      {sess.metricVersion === 2 ? '—' : (sess.trend || '—')}
                     </span>
                   </td>
                   <td className="py-3 pr-2 text-right">
                     {sess.synced ? (
                       <span className="inline-flex items-center gap-1 text-xs font-semibold text-[#5C6E53]">
                         <CheckCircle2 className="w-3.5 h-3.5 text-[#7C9070]" />
-                        <span>Cloud Synced</span>
+                        <span>{choose(language,'AI feedback received','AI प्रतिक्रिया मिली','AI মতামত পোৱা গৈছে')}</span>
                       </span>
                     ) : (
                       <span className="inline-flex items-center gap-1 text-xs font-semibold text-[#8C5E28]">
@@ -690,7 +648,7 @@ export const CaregiverDashboard: React.FC<CaregiverDashboardProps> = ({
                   {language === 'as' ? 'নতুন ৰোগীৰ তথ্য অন্তৰ্ভুক্ত কৰক' : language === 'hi' ? 'नया मरीज़ प्रोफ़ाइल जोड़ें' : 'Add New Patient Dataset'}
                 </h4>
                 <p className="text-xs text-[#73706A]">
-                  {language === 'as' ? 'প্ৰশিক্ষণ আৰু জ্ঞানীয় নিৰীক্ষণৰ বাবে' : language === 'hi' ? 'मॉडल प्रशिक्षण व दैनिक निगरानी हेतु' : 'For longitudinal tracking, clinical care, and model training'}
+                  {language === 'as' ? 'প্ৰশিক্ষণ আৰু জ্ঞানীয় নিৰীক্ষণৰ বাবে' : language === 'hi' ? 'मॉडल प्रशिक्षण व दैनिक निगरानी हेतु' : 'For activity tracking and prototype evaluation'}
                 </p>
               </div>
               <button

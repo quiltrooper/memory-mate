@@ -1,3 +1,4 @@
+import { choose } from '../../../utils/activity';
 import React, { useState } from 'react';
 import { Sparkles, Volume2, Plus, X, Calendar, MapPin, MessageSquareHeart, Image as ImageIcon } from 'lucide-react';
 import { MemoryItem, Language, PatientProfile } from '../../../types';
@@ -10,6 +11,7 @@ interface DigitalMemoryBoxProps {
   patientProfile?: PatientProfile;
   language: Language;
   largeText: boolean;
+  offlineMode?: boolean;
 }
 
 export const DigitalMemoryBox: React.FC<DigitalMemoryBoxProps> = ({
@@ -18,6 +20,7 @@ export const DigitalMemoryBox: React.FC<DigitalMemoryBoxProps> = ({
   patientProfile,
   language,
   largeText,
+  offlineMode = false,
 }) => {
   const t = TRANSLATIONS[language];
   const [activePromptMemoryId, setActivePromptMemoryId] = useState<string | null>(null);
@@ -44,43 +47,17 @@ export const DigitalMemoryBox: React.FC<DigitalMemoryBoxProps> = ({
     setActivePromptMemoryId(memory.id);
 
     try {
-      const res = await fetch('/api/gemini/reminiscence', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          title: memory.title,
-          caption: memory.caption,
-          year: memory.dateOrEra,
-          location: memory.location,
-          language,
-          patientName: patientProfile?.name,
-        }),
-      });
-
-      const data = await res.json();
-      const promptResult =
-        data.prompt ||
-        (language === 'as'
-          ? 'কিমান সুন্দৰ স্মৃতি! সেই দিনাৰ আনন্দ আৰু হাঁহি আপোনাৰ মনত পৰে নে?'
-          : language === 'hi'
-          ? 'कितनी मधुर स्मृति है! क्या उस दिन की सुगंध और सुखद बातें आपको याद हैं?'
-          : 'What a heartwarming memory. Do you remember the happy laughter and the gentle breeze on that day?');
-
-      setPrompts((prev) => ({ ...prev, [memory.id]: promptResult }));
-      setLoadingPromptId(null);
-      speakText(promptResult, language);
-    } catch (err) {
-      console.error(err);
-      setLoadingPromptId(null);
-      const fallback =
-        language === 'as'
-          ? 'পৰিয়ালৰ সৈতে এটি আনন্দৰ মূহূৰ্ত। মনত পৰে নে সেই দিনা একেলগে চাহ খোৱাৰ কথা?'
-          : language === 'hi'
-          ? 'परिवार के साथ एक अनमोल पल। क्या उस दिन साथ में पी गई गर्म चाय याद है?'
-          : 'A wonderful memory with family. Do you remember the warm cup of tea you shared together afterward?';
-      setPrompts((prev) => ({ ...prev, [memory.id]: fallback }));
-      speakText(fallback, language);
-    }
+      if (offlineMode || !navigator.onLine) throw new Error('Offline');
+      const response = await fetch('/api/gemini/reminiscence', {method:'POST', headers:{'Content-Type':'application/json'}, signal:AbortSignal.timeout(15000), body:JSON.stringify({title:memory.title, caption:memory.caption, year:memory.dateOrEra, location:memory.location, language})});
+      const data = await response.json();
+      if (!response.ok || data.source !== 'gemini' || typeof data.prompt !== 'string') throw new Error('Unavailable');
+      setPrompts(previous => ({...previous,[memory.id]:data.prompt}));
+      speakText(data.prompt, language);
+    } catch {
+      const text = choose(language, `AI is unavailable. Saved caption: ${memory.caption}. What would you like to share about this photo?`, `AI उपलब्ध नहीं है। सहेजा विवरण: ${memory.caption}। इस तस्वीर के बारे में क्या साझा करना चाहेंगे?`, `AI উপলব্ধ নহয়। সংৰক্ষিত বিৱৰণ: ${memory.caption}। এই ছবিৰ বিষয়ে কি ক’ব বিচাৰে?`);
+      setPrompts(previous => ({...previous,[memory.id]:text}));
+      speakText(text, language);
+    } finally { setLoadingPromptId(null); }
   };
 
   const handleCreateMemory = (e: React.FormEvent) => {
@@ -95,7 +72,7 @@ export const DigitalMemoryBox: React.FC<DigitalMemoryBoxProps> = ({
       caption: caption.trim(),
       imageUrl:
         imageUrl.trim() ||
-        'https://images.unsplash.com/photo-1544735716-392fe2489ffa?w=600&auto=format&fit=crop&q=80',
+        '/memory-mate.svg',
       createdAt: new Date().toISOString().split('T')[0],
     };
 
