@@ -12,7 +12,7 @@ python -m venv .venv
 .venv/Scripts/python.exe -m uvicorn app:app --host 127.0.0.1 --port 8000
 ```
 
-SQLite is created at `backend/data/memory-mate.sqlite3` (ignored by Git). The three fictional launch patients seed once. Restarting never overwrites reminder edits. The original browser localStorage is not imported or changed.
+SQLite is created at `backend/data/memory-mate.sqlite3` (ignored by Git). All 103 fictional patients (three launch profiles plus 100 generated profiles) seed once by ID. Restarting never overwrites reminder edits. The original browser localStorage is not imported or changed.
 
 API documentation: http://127.0.0.1:8000/docs
 
@@ -27,7 +27,7 @@ flutter pub get
 flutter run -d web-server --web-hostname 127.0.0.1 --web-port 3002 --dart-define=API_URL=http://127.0.0.1:8000
 ```
 
-The first slice covers three profiles, reminder edit/completion, memories, and word recall. Recorded activities are separate from synthetic history. Score is correct / attempts * 100, with omissions counted as errors. The backend validates input and computes the score; it does not independently observe the player's answers. This is a demo activity measure, not a diagnostic model.
+The first slice covers 103 profiles, reminder edit/completion, memories, and word recall. Recorded activities are separate from synthetic history. Score is correct / attempts * 100, with omissions counted as errors. The backend validates input and computes the score; it does not independently observe the player's answers. This is a demo activity measure, not a diagnostic model.
 
 ## Container status
 
@@ -55,3 +55,5 @@ Browser regression uses a separate API instance on port 8001 with a temporary SQ
 Mobile browser verification is unfinished: the desktop-to-mobile navigation locator timed out after the persistence, isolation, and game checks passed. Do not report the entire browser script as passing yet.
 
 The desktop screenshot (flutter-desktop.png) was captured against the isolated browser-test database. Its reminder text is test data, not a real patient record.
+
+The seed exporter includes all 100 generated profiles from src/data/generatedPatients.ts. Startup inserts only missing patient IDs; existing patient payloads, edited reminders, and recorded sessions are preserved. Synthetic session history remains marked demo and is separate from recorded activity.

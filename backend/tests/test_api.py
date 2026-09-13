@@ -11,7 +11,7 @@ class PersistenceTests(unittest.TestCase):
             database = Path(folder) / 'test.sqlite3'
             with TestClient(create_app(database)) as client:
                 patients = client.get('/api/patients').json()
-                self.assertEqual(len(patients), 3)
+                self.assertEqual(len(patients), 103)
                 first, second = [p['profile']['id'] for p in patients[:2]]
                 reminder = client.get(f'/api/patients/{first}').json()['reminders'][0]
                 url = f'/api/patients/{first}/reminders/{reminder["id"]}'
@@ -23,7 +23,7 @@ class PersistenceTests(unittest.TestCase):
                 saved = client.get(f'/api/patients/{first}').json()['reminders'][0]
                 self.assertEqual(saved['title'], 'Persisted reminder')
                 self.assertEqual(saved['version'], 2)
-                self.assertEqual(len(client.get('/api/patients').json()),3)
+                self.assertEqual(len(client.get('/api/patients').json()),103)
 
     def test_zero_score_and_invalid_input(self):
         with tempfile.TemporaryDirectory() as folder:
