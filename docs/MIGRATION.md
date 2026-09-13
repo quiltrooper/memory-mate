@@ -1,6 +1,6 @@
 # Reviewer migration: local working slice
 
-The React/Express app remains unchanged and runnable on port 3000. The migration lives in `backend/` and `flutter_app/` on `codex/flutter-fastapi-sqlite`.
+The React/Express app remains unchanged and runnable on port 3000. The migration lives in `backend/` and `flutter_app/` on `main`.
 
 ## Run the Python service (Windows)
 
@@ -53,3 +53,5 @@ Build with `flutter --no-version-check build web --release --no-wasm-dry-run --n
 Browser regression uses a separate API instance on port 8001 with a temporary SQLite database; it verifies reminder persistence, patient isolation, and real word-game saving without modifying the launch database. Run `node scripts/browser-flutter.mjs` with Playwright installed, or set `PLAYWRIGHT_MODULE` and `BROWSER_EXECUTABLE` to your local installations.
 
 Mobile browser verification is unfinished: the desktop-to-mobile navigation locator timed out after the persistence, isolation, and game checks passed. Do not report the entire browser script as passing yet.
+
+The desktop screenshot (flutter-desktop.png) was captured against the isolated browser-test database. Its reminder text is test data, not a real patient record.
