@@ -1,0 +1,10 @@
+.git
+node_modules
+dist
+.memory-mate-tools
+backend/.venv
+backend/data
+flutter_app/.dart_tool
+flutter_app/build
+.env
+.env.local

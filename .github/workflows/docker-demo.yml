@@ -1,0 +1,45 @@
+name: Verify Docker demo
+on:
+  push:
+    branches: [main]
+    paths: ['backend/**', 'flutter_app/**', 'Dockerfile', 'compose.yaml', 'deployment/**', '.github/workflows/docker-demo.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  containers:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build and start both containers
+        run: docker compose up --build -d --wait
+      - name: Verify API, frontend, and persistent reminder
+        run: |
+          python3 - <<'PY'
+          import json, urllib.request
+          def request(path,body=None,method='GET'):
+              data=None if body is None else json.dumps(body).encode()
+              with urllib.request.urlopen(urllib.request.Request('http://127.0.0.1:3002'+path,data=data,method=method,headers={'Content-Type':'application/json'})) as r:
+                  return json.load(r)
+          assert len(request('/api/patients'))==103
+          patient=request('/api/patients/launch-demo-1')
+          reminder=patient['reminders'][0]
+          request('/api/patients/launch-demo-1/reminders/'+reminder['id'],{'version':reminder['version'],'title':'Container persistence check'},'PATCH')
+          assert urllib.request.urlopen('http://127.0.0.1:3002/main.dart.js').status==200
+          PY
+          docker compose restart api
+          for i in $(seq 1 30); do curl -fsS http://127.0.0.1:3002/api/health && break || sleep 2; done
+          python3 - <<'PY'
+          import json,urllib.request
+          with urllib.request.urlopen('http://127.0.0.1:3002/api/patients/launch-demo-1') as r:
+              patient=json.load(r)
+          assert any(x['title']=='Container persistence check' for x in patient['reminders'])
+          print('Both containers work; SQLite edits survive a backend container restart.')
+          PY
+      - name: Logs
+        if: always()
+        run: docker compose logs --no-color
+      - name: Stop test containers
+        if: always()
+        run: docker compose down -v

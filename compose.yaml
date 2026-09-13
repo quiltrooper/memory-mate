@@ -1,11 +1,21 @@
 services:
   api:
     build: ./backend
-    ports:
-      - "127.0.0.1:8000:8000"
     volumes:
       - memory-mate-data:/data
     environment:
       ALLOWED_ORIGINS: http://localhost:3002,http://127.0.0.1:3002
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/health')"]
+      interval: 5s
+      timeout: 3s
+      retries: 15
+  web:
+    build: .
+    ports:
+      - "127.0.0.1:3002:80"
+    depends_on:
+      api:
+        condition: service_healthy
 volumes:
   memory-mate-data:
