@@ -1,0 +1,10 @@
+{
+  "name": "Memory Mate",
+  "short_name": "Memory Mate",
+  "start_url": ".",
+  "display": "standalone",
+  "background_color": "#FAF8F3",
+  "theme_color": "#365C48",
+  "description": "Familiar memories, daily reminders, and gentle cognitive activities.",
+  "icons": [{"src": "memory-mate.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any"}]
+}
