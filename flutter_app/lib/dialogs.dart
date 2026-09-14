@@ -1,3 +1,4 @@
+import 'translations.dart';
 import 'package:flutter/material.dart';
 
 Future<Map<String, String>?> recordDialog(
@@ -5,12 +6,14 @@ Future<Map<String, String>?> recordDialog(
   String title,
   Map<String, String> labels,
   Map<String, String> initial, {
+  String language = 'en',
   Set<String> requiredFields = const {},
   Map<String, List<String>> options = const {},
 }) => showDialog<Map<String, String>>(
   context: context,
   builder: (_) => RecordDialog(
     title: title,
+    language: language,
     labels: labels,
     initial: initial,
     requiredFields: requiredFields,
@@ -20,12 +23,14 @@ Future<Map<String, String>?> recordDialog(
 
 class RecordDialog extends StatefulWidget {
   final String title;
+  final String language;
   final Map<String, String> labels, initial;
   final Set<String> requiredFields;
   final Map<String, List<String>> options;
   const RecordDialog({
     super.key,
     required this.title,
+    required this.language,
     required this.labels,
     required this.initial,
     required this.requiredFields,
@@ -80,8 +85,10 @@ class _RecordDialogState extends State<RecordDialog> {
                           decoration: InputDecoration(labelText: entry.value),
                           items: widget.options[entry.key]!
                               .map(
-                                (v) =>
-                                    DropdownMenuItem(value: v, child: Text(v)),
+                                (v) => DropdownMenuItem(
+                                  value: v,
+                                  child: Text(translate(widget.language, v)),
+                                ),
                               )
                               .toList(),
                           onChanged: (v) => fields[entry.key]!.text = v!,
@@ -99,7 +106,7 @@ class _RecordDialogState extends State<RecordDialog> {
                           validator: (v) =>
                               widget.requiredFields.contains(entry.key) &&
                                   (v == null || v.trim().isEmpty)
-                              ? 'Required'
+                              ? translate(widget.language, 'Required')
                               : null,
                         ),
                 ),
@@ -111,7 +118,7 @@ class _RecordDialogState extends State<RecordDialog> {
     actions: [
       TextButton(
         onPressed: () => Navigator.pop(context),
-        child: const Text('Cancel'),
+        child: Text(translate(widget.language, 'Cancel')),
       ),
       FilledButton(
         onPressed: () {
@@ -122,7 +129,7 @@ class _RecordDialogState extends State<RecordDialog> {
             });
           }
         },
-        child: const Text('Save'),
+        child: Text(translate(widget.language, 'Save')),
       ),
     ],
   );

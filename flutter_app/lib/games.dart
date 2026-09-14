@@ -7,11 +7,13 @@ import 'common.dart';
 import 'translations.dart';
 
 class WordGame extends StatefulWidget {
+  final String language;
   final String patientId;
   final List<dynamic> sessions;
   final VoidCallback onSaved;
   final int? configuredLevel;
   const WordGame({
+    this.language = 'en',
     super.key,
     required this.patientId,
     required this.sessions,
@@ -23,6 +25,8 @@ class WordGame extends StatefulWidget {
 }
 
 class _WordGameState extends State<WordGame> {
+  String t(String key, [Map<String, Object?> values = const {}]) =>
+      translate(widget.language, key, values);
   int stage = 0;
   Timer? timer;
   final Set<String> answers = {};
@@ -121,9 +125,9 @@ class _WordGameState extends State<WordGame> {
   Widget build(BuildContext context) => Column(
     crossAxisAlignment: CrossAxisAlignment.start,
     children: [
-      const Text(
-        'A moment for your mind',
-        style: TextStyle(
+      Text(
+        t('A moment for your mind'),
+        style: const TextStyle(
           fontSize: 30,
           fontWeight: FontWeight.bold,
           color: forest,
@@ -131,7 +135,10 @@ class _WordGameState extends State<WordGame> {
       ),
       const SizedBox(height: 10),
       Text(
-        'Word recall · Level $level · Difficulty uses your recorded game history.',
+        t(
+          'Word recall · Level {level} · Difficulty uses your recorded game history.',
+          {'level': level},
+        ),
       ),
       const SizedBox(height: 24),
       Card(
@@ -142,7 +149,9 @@ class _WordGameState extends State<WordGame> {
             children: [
               if (stage == 0) ...[
                 Text(
-                  'Remember ${targets.length} words, then find them in a list.',
+                  t('Remember {count} words, then find them in a list.', {
+                    'count': targets.length,
+                  }),
                   style: const TextStyle(fontSize: 22),
                 ),
                 const SizedBox(height: 20),
@@ -160,11 +169,11 @@ class _WordGameState extends State<WordGame> {
                       }
                     });
                   },
-                  child: const Text('Start word recall'),
+                  child: Text(t('Start word recall')),
                 ),
               ],
               if (stage == 1) ...[
-                const Text('Take a moment to remember these words.'),
+                Text(t('Take a moment to remember these words.')),
                 const SizedBox(height: 24),
                 Wrap(
                   spacing: 12,
@@ -173,7 +182,7 @@ class _WordGameState extends State<WordGame> {
                       .map(
                         (word) => Chip(
                           label: Text(
-                            word,
+                            t(word),
                             style: const TextStyle(fontSize: 24),
                           ),
                         ),
@@ -182,7 +191,11 @@ class _WordGameState extends State<WordGame> {
                 ),
               ],
               if (stage == 2) ...[
-                Text('Choose up to ${targets.length} words you remember.'),
+                Text(
+                  t('Choose up to {count} words you remember.', {
+                    'count': targets.length,
+                  }),
+                ),
                 const SizedBox(height: 20),
                 Wrap(
                   spacing: 12,
@@ -191,7 +204,7 @@ class _WordGameState extends State<WordGame> {
                       .map(
                         (word) => FilterChip(
                           label: Text(
-                            word,
+                            t(word),
                             style: const TextStyle(fontSize: 20),
                           ),
                           selected: answers.contains(word),
@@ -209,33 +222,36 @@ class _WordGameState extends State<WordGame> {
                 const SizedBox(height: 20),
                 FilledButton(
                   onPressed: submit,
-                  child: const Text('Check my words'),
+                  child: Text(t('Check my words')),
                 ),
               ],
               if (stage == 3) ...[
                 Text(
-                  '${answers.where(targets.contains).length} of ${targets.length} words recalled',
+                  t('{correct} of {count} words recalled', {
+                    'correct': answers.where(targets.contains).length,
+                    'count': targets.length,
+                  }),
                   style: const TextStyle(
                     fontSize: 26,
                     fontWeight: FontWeight.bold,
                   ),
                 ),
                 const SizedBox(height: 12),
-                const Text('This is a game result, not a diagnosis.'),
+                Text(t('This is a game result, not a diagnosis.')),
                 const SizedBox(height: 16),
                 if (saving) const CircularProgressIndicator(),
                 if (saved) ...[
-                  const Text('Saved to your activity history.'),
+                  Text(t('Saved to your activity history.')),
                   TextButton(
                     onPressed: widget.onSaved,
-                    child: const Text('Play again'),
+                    child: Text(t('Play again')),
                   ),
                 ],
                 if (error != null) ...[
-                  Text(error!),
+                  Text(t(error!)),
                   FilledButton(
                     onPressed: saving ? null : submit,
-                    child: const Text('Retry saving'),
+                    child: Text(t('Retry saving')),
                   ),
                 ],
               ],
@@ -245,16 +261,21 @@ class _WordGameState extends State<WordGame> {
       ),
       const SizedBox(height: 24),
       Text(
-        '${widget.sessions.length} recorded activities',
+        t('{count} recorded activities', {'count': widget.sessions.length}),
         style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
       ),
       ...widget.sessions
           .take(5)
           .map(
             (s) => ListTile(
-              title: Text('${s['game_type']} · ${s['score']}% accuracy'),
+              title: Text(
+                '${t({'word': 'Word recall', 'pattern': 'Pattern recall', 'matching': 'Picture matching'}[s['game_type']] ?? s['game_type'])} · ${t('{score}% accuracy', {'score': s['score']})}',
+              ),
               subtitle: Text(
-                '${s['errors']} errors · ${s['response_time_ms']} ms per answer',
+                t('{errors} errors · {ms} ms per answer', {
+                  'errors': s['errors'],
+                  'ms': s['response_time_ms'],
+                }),
               ),
             ),
           ),
@@ -309,6 +330,7 @@ class _GameHubState extends State<GameHub> {
           WordGame(
             key: ValueKey('word-${widget.patientId}'),
             patientId: widget.patientId,
+            language: widget.language,
             sessions: widget.sessions,
             onSaved: widget.onSaved,
             configuredLevel: levels['word'],
@@ -317,6 +339,7 @@ class _GameHubState extends State<GameHub> {
           PatternGame(
             key: ValueKey('pattern-${widget.patientId}'),
             patientId: widget.patientId,
+            language: widget.language,
             level: levels['pattern'],
             onSaved: widget.onSaved,
           ),
@@ -324,6 +347,7 @@ class _GameHubState extends State<GameHub> {
           MatchingGame(
             key: ValueKey('matching-${widget.patientId}'),
             patientId: widget.patientId,
+            language: widget.language,
             level: levels['matching'],
             onSaved: widget.onSaved,
           ),
@@ -333,10 +357,12 @@ class _GameHubState extends State<GameHub> {
 }
 
 class SavedResult extends StatefulWidget {
+  final String language;
   final String patientId, game;
   final int correct, attempts, responseMs, level;
   final VoidCallback onSaved;
   const SavedResult({
+    this.language = 'en',
     super.key,
     required this.patientId,
     required this.game,
@@ -351,6 +377,8 @@ class SavedResult extends StatefulWidget {
 }
 
 class _SavedResultState extends State<SavedResult> {
+  String t(String key, [Map<String, Object?> values = const {}]) =>
+      translate(widget.language, key, values);
   final id = DateTime.now().microsecondsSinceEpoch.toString();
   bool saving = true, saved = false;
   @override
@@ -393,7 +421,9 @@ class _SavedResultState extends State<SavedResult> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            '${(widget.correct * 100 / widget.attempts).round()}% accuracy',
+            t('{score}% accuracy', {
+              'score': (widget.correct * 100 / widget.attempts).round(),
+            }),
             style: const TextStyle(
               fontSize: 28,
               fontWeight: FontWeight.bold,
@@ -401,21 +431,25 @@ class _SavedResultState extends State<SavedResult> {
             ),
           ),
           Text(
-            '${widget.correct} correct out of ${widget.attempts} attempts. ${widget.attempts - widget.correct} errors.',
+            t(
+              '{correct} correct out of {attempts} attempts. {errors} errors.',
+              {
+                'correct': widget.correct,
+                'attempts': widget.attempts,
+                'errors': widget.attempts - widget.correct,
+              },
+            ),
           ),
           const SizedBox(height: 12),
-          const Text('Activity measure only. This is not a diagnosis.'),
+          Text(t('Activity measure only. This is not a diagnosis.')),
           if (saving) const LinearProgressIndicator(),
           if (!saving && saved) ...[
-            const Text('Saved to your activity history.'),
-            FilledButton(
-              onPressed: widget.onSaved,
-              child: const Text('Continue'),
-            ),
+            Text(t('Saved to your activity history.')),
+            FilledButton(onPressed: widget.onSaved, child: Text(t('Continue'))),
           ],
           if (!saving && !saved) ...[
-            const Text('Could not save. Your result is still here.'),
-            FilledButton(onPressed: save, child: const Text('Retry saving')),
+            Text(t('Could not save. Your result is still here.')),
+            FilledButton(onPressed: save, child: Text(t('Retry saving'))),
           ],
         ],
       ),
@@ -434,10 +468,12 @@ const gameIcons = [
 const gameNames = ['Flower', 'Sun', 'Water', 'Tree', 'Book', 'Home'];
 
 class PatternGame extends StatefulWidget {
+  final String language;
   final String patientId;
   final int level;
   final VoidCallback onSaved;
   const PatternGame({
+    this.language = 'en',
     super.key,
     required this.patientId,
     required this.level,
@@ -448,6 +484,8 @@ class PatternGame extends StatefulWidget {
 }
 
 class _PatternGameState extends State<PatternGame> {
+  String t(String key, [Map<String, Object?> values = const {}]) =>
+      translate(widget.language, key, values);
   late final List<int> sequence;
   int stage = 0, flash = -1, position = 0, correct = 0;
   Timer? timer;
@@ -501,31 +539,37 @@ class _PatternGameState extends State<PatternGame> {
   Widget build(BuildContext context) => Column(
     crossAxisAlignment: CrossAxisAlignment.start,
     children: [
-      const Text(
-        'Pattern recall',
-        style: TextStyle(
+      Text(
+        t('Pattern recall'),
+        style: const TextStyle(
           fontSize: 28,
           fontWeight: FontWeight.bold,
           color: forest,
         ),
       ),
       Text(
-        'Level ${widget.level}. Watch the symbols, then repeat their order.',
+        t('Level {level}. Watch the symbols, then repeat their order.', {
+          'level': widget.level,
+        }),
       ),
       const SizedBox(height: 20),
       if (stage == 0)
-        FilledButton(
-          onPressed: start,
-          child: const Text('Start pattern recall'),
-        ),
+        FilledButton(onPressed: start, child: Text(t('Start pattern recall'))),
       if (stage == 1)
         Text(
-          'Remember ${gameNames[sequence[flash]]} (${flash + 1} of ${sequence.length})',
+          t('Remember {symbol} ({position} of {count})', {
+            'symbol': t(gameNames[sequence[flash]]),
+            'position': flash + 1,
+            'count': sequence.length,
+          }),
           style: const TextStyle(fontSize: 22),
         ),
       if (stage == 2)
         Text(
-          'Your turn: ${position + 1} of ${sequence.length}',
+          t('Your turn: {position} of {count}', {
+            'position': position + 1,
+            'count': sequence.length,
+          }),
           style: const TextStyle(fontSize: 22),
         ),
       if (stage == 1 || stage == 2)
@@ -550,7 +594,7 @@ class _PatternGameState extends State<PatternGame> {
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
                       Icon(gameIcons[i], size: 30),
-                      Text(gameNames[i]),
+                      Text(t(gameNames[i])),
                     ],
                   ),
                 ),
@@ -561,6 +605,7 @@ class _PatternGameState extends State<PatternGame> {
       if (stage == 3)
         SavedResult(
           patientId: widget.patientId,
+          language: widget.language,
           game: 'pattern',
           correct: correct,
           attempts: sequence.length,
@@ -573,10 +618,12 @@ class _PatternGameState extends State<PatternGame> {
 }
 
 class MatchingGame extends StatefulWidget {
+  final String language;
   final String patientId;
   final int level;
   final VoidCallback onSaved;
   const MatchingGame({
+    this.language = 'en',
     super.key,
     required this.patientId,
     required this.level,
@@ -587,6 +634,8 @@ class MatchingGame extends StatefulWidget {
 }
 
 class _MatchingGameState extends State<MatchingGame> {
+  String t(String key, [Map<String, Object?> values = const {}]) =>
+      translate(widget.language, key, values);
   late final List<int> cards;
   final matched = <int>{};
   int? first, second;
@@ -642,16 +691,19 @@ class _MatchingGameState extends State<MatchingGame> {
   Widget build(BuildContext context) => Column(
     crossAxisAlignment: CrossAxisAlignment.start,
     children: [
-      const Text(
-        'Picture matching',
-        style: TextStyle(
+      Text(
+        t('Picture matching'),
+        style: const TextStyle(
           fontSize: 28,
           fontWeight: FontWeight.bold,
           color: forest,
         ),
       ),
       Text(
-        'Level ${widget.level}. Find ${widget.level + 3} matching pairs. No time limit.',
+        t('Level {level}. Find {count} matching pairs. No time limit.', {
+          'level': widget.level,
+          'count': widget.level + 3,
+        }),
       ),
       const SizedBox(height: 20),
       if (!started)
@@ -660,7 +712,7 @@ class _MatchingGameState extends State<MatchingGame> {
             watch.start();
             setState(() => started = true);
           },
-          child: const Text('Start picture matching'),
+          child: Text(t('Start picture matching')),
         ),
       if (started && matched.length < cards.length)
         Wrap(
@@ -681,8 +733,11 @@ class _MatchingGameState extends State<MatchingGame> {
                 ),
                 child: Semantics(
                   label: revealed
-                      ? '${gameNames[cards[index]]} card ${index + 1}'
-                      : 'Hidden card ${index + 1}',
+                      ? t('{symbol} card {index}', {
+                          'symbol': t(gameNames[cards[index]]),
+                          'index': index + 1,
+                        })
+                      : t('Hidden card {index}', {'index': index + 1}),
                   child: ExcludeSemantics(
                     child: Column(
                       mainAxisAlignment: MainAxisAlignment.center,
@@ -694,7 +749,9 @@ class _MatchingGameState extends State<MatchingGame> {
                           size: 28,
                         ),
                         Text(
-                          revealed ? gameNames[cards[index]] : '${index + 1}',
+                          revealed
+                              ? t(gameNames[cards[index]])
+                              : '${index + 1}',
                         ),
                       ],
                     ),
@@ -707,6 +764,7 @@ class _MatchingGameState extends State<MatchingGame> {
       if (started && matched.length == cards.length)
         SavedResult(
           patientId: widget.patientId,
+          language: widget.language,
           game: 'matching',
           correct: cards.length ~/ 2,
           attempts: attempts,

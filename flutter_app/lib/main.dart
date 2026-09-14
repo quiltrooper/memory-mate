@@ -52,7 +52,8 @@ class _HomeState extends State<Home> {
   String search = '';
   String get language =>
       patient?['profile']?['preferences']?['language'] ?? 'en';
-  String t(String text) => translate(language, text);
+  String t(String text, [Map<String, Object?> values = const {}]) =>
+      translate(language, text, values);
   @override
   void initState() {
     super.initState();
@@ -73,8 +74,8 @@ class _HomeState extends State<Home> {
     if (response.statusCode >= 400) {
       throw Exception(
         response.statusCode == 409
-            ? 'This reminder changed elsewhere. Refresh and try again.'
-            : 'Could not save or load this record (${response.statusCode}).',
+            ? t('This reminder changed elsewhere. Refresh and try again.')
+            : t('Could not save or load this record ({status}).', {'status':response.statusCode}),
       );
     }
     return jsonDecode(response.body);
@@ -185,6 +186,7 @@ class _HomeState extends State<Home> {
       t('Edit reminder'),
       labels,
       {for (final key in labels.keys) key: '${reminder[key] ?? ''}'},
+      language: language,
       requiredFields: {'title', 'time'},
       options: {
         'category': ['routine', 'meal', 'appointment', 'medication'],
@@ -207,8 +209,8 @@ class _HomeState extends State<Home> {
     if (response.statusCode >= 400) {
       throw Exception(
         response.statusCode == 409
-            ? 'Record changed elsewhere. Refresh and retry.'
-            : 'Please check the supplied fields. (${response.statusCode})',
+            ? t('Record changed elsewhere. Refresh and retry.')
+            : t('Please check the supplied fields. ({status})', {'status':response.statusCode}),
       );
     }
     return jsonDecode(response.body);
@@ -269,6 +271,7 @@ class _HomeState extends State<Home> {
         'weeklyGoalDays': t('Weekly activity goal (days)'),
       },
       initial,
+      language: language,
       requiredFields: {'name', 'age'},
       options: {
         'language': ['en', 'hi', 'as'],
@@ -317,6 +320,7 @@ class _HomeState extends State<Home> {
       t('Add reminder'),
       {'title': t('Title'), 'time': t('Time'), 'category': t('Category')},
       {'category': 'routine', 'time': '09:00 AM'},
+      language: language,
       requiredFields: {'title', 'time'},
       options: {
         'category': ['routine', 'meal', 'appointment', 'medication'],
@@ -343,6 +347,7 @@ class _HomeState extends State<Home> {
       t(memory == null ? 'Add memory' : 'Edit memory'),
       labels,
       {for (final key in labels.keys) key: '${memory?[key] ?? ''}'},
+      language: language,
       requiredFields: {'title', 'caption'},
     );
     if (result != null && mounted) {
@@ -359,7 +364,7 @@ class _HomeState extends State<Home> {
       context: context,
       builder: (c) => AlertDialog(
         title: Text(t('Delete')),
-        content: const Text('Remove this saved item?'),
+        content: Text(t('Remove this saved item?')),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(c, false),
@@ -389,22 +394,29 @@ class _HomeState extends State<Home> {
             ),
             Text(
               result['supportLevel'] == null
-                  ? '${result['recordedCount']} / 3 activities completed'
+                  ? t('{count} / 3 activities completed', {
+                      'count': result['recordedCount'],
+                    })
                   : '${t(result['supportLevel'])} · ${result['supportIndex']} / 100',
               style: const TextStyle(fontSize: 24, color: forest),
             ),
             Text(
-              '${result['activeDays']} / ${result['weeklyGoalDays']} active days this week',
+              t('{days} / {goal} active days this week', {
+                'days': result['activeDays'],
+                'goal': result['weeklyGoalDays'],
+              }),
             ),
-            const Text(
-              'An activity estimate, not a diagnosis. Synthetic history is excluded.',
+            Text(
+              t(
+                'An activity estimate, not a diagnosis. Synthetic history is excluded.',
+              ),
             ),
             ExpansionTile(
               title: Text(t('How this is calculated')),
               children: [
                 Padding(
                   padding: const EdgeInsets.all(12),
-                  child: Text(result['explanation']),
+                  child: Text(t(result['explanation'])),
                 ),
               ],
             ),
@@ -420,7 +432,7 @@ class _HomeState extends State<Home> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
-          title,
+          t(title),
           style: const TextStyle(
             fontSize: 30,
             fontWeight: FontWeight.bold,
@@ -429,7 +441,7 @@ class _HomeState extends State<Home> {
         ),
         const SizedBox(height: 8),
         Text(
-          subtitle,
+          t(subtitle),
           style: const TextStyle(fontSize: 16, color: Colors.black54),
         ),
       ],
@@ -521,26 +533,32 @@ class _HomeState extends State<Home> {
               ),
               const SizedBox(height: 8),
               Text(
-                '${profile['age']} years · ${profile['location']}',
+                t('{age} years · {location}', {
+                  'age': profile['age'],
+                  'location': profile['location'],
+                }),
                 style: const TextStyle(color: Colors.white70, fontSize: 16),
               ),
               const SizedBox(height: 20),
               Text(
-                'Caregiver: ${profile['primaryCaregiver']}',
+                t('Caregiver: {name}', {'name': profile['primaryCaregiver']}),
                 style: const TextStyle(color: Colors.white),
               ),
               const SizedBox(height: 10),
               Text(
-                '$completed of ${(patient!['reminders'] as List).length} daily reminders complete',
+                t('{done} of {total} daily reminders complete', {
+                  'done': completed,
+                  'total': (patient!['reminders'] as List).length,
+                }),
                 style: const TextStyle(color: Colors.white),
               ),
             ],
           ),
         ),
         const SizedBox(height: 28),
-        const Text(
-          'Your daily rhythm',
-          style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
+        Text(
+          t('Your daily rhythm'),
+          style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
         ),
         const SizedBox(height: 12),
         reminderList(),
@@ -642,11 +660,11 @@ class _HomeState extends State<Home> {
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Text(error!),
+                  Text(t(error!)),
                   const SizedBox(height: 16),
                   FilledButton(
                     onPressed: loadPatients,
-                    child: const Text('Retry'),
+                    child: Text(t('Retry')),
                   ),
                 ],
               ),
@@ -668,8 +686,10 @@ class _HomeState extends State<Home> {
                           color: const Color(0xFFFFEFCD),
                           borderRadius: BorderRadius.circular(12),
                         ),
-                        child: const Text(
-                          'DEMO PROFILE · Fictional patient details and sample memories. New game results are recorded separately.',
+                        child: Text(
+                          t(
+                            'DEMO PROFILE · Fictional patient details and sample memories. New game results are recorded separately.',
+                          ),
                         ),
                       ),
                     if (tab == 0) ...[
@@ -727,13 +747,16 @@ class _HomeState extends State<Home> {
               SizedBox(width: 10),
               Text(
                 'Memory Mate',
-                style: TextStyle(fontWeight: FontWeight.bold, color: forest),
+                style: TextStyle(
+                  fontWeight: FontWeight.bold,
+                  color: forest,
+                ),
               ),
             ],
           ),
           actions: [
             IconButton(
-              tooltip: 'Refresh records',
+              tooltip: t('Refresh records'),
               onPressed: saving ? null : loadPatients,
               icon: const Icon(Icons.refresh),
             ),

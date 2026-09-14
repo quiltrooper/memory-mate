@@ -12,7 +12,7 @@ try {
   await page.goto(process.env.FLUTTER_URL || 'http://127.0.0.1:3002');
   await page.getByRole('button', {name: 'Edit reminder'}).first().waitFor({timeout: 60000});
   await page.getByRole('button', {name: 'Edit reminder'}).first().click();
-  await page.getByRole('textbox').fill('Browser persistence check');
+  await page.getByRole('textbox', {name: 'Title', exact: true}).fill('Browser persistence check');
   await page.getByRole('button', {name: 'Save', exact: true}).click();
   await page.getByText('Reminder saved', {exact: true}).waitFor();
   await page.reload();
@@ -41,7 +41,7 @@ try {
   assert.match(await page.locator('body').ariaSnapshot(), /0% accuracy/);
   console.log('PASS actual word game saves zero accurately and reloads activity history');
   await page.setViewportSize({width: 390, height: 844});
-  await page.getByRole('button', {name: 'Today Tab 1 of 4'}).click();
+  await page.getByRole('tab', {name: 'Today', exact: true}).click();
   await page.getByRole('button', {name: 'Edit reminder'}).first().waitFor();
   await page.screenshot({path: 'docs/flutter-mobile.png', fullPage: true});
   assert.deepEqual(errors, []);

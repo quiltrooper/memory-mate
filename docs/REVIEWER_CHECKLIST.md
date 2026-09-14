@@ -1,6 +1,16 @@
 # Reviewer completion work
 
-Scope: Flutter, Python FastAPI, SQLite, deterministic profile-based activity assessment, UI/UX, design evidence, implementation diagram, and Docker. GKE is explicitly excluded.
+Current scope: Flutter, Python FastAPI, SQLite, deterministic profile-based activity assessment, functional UI, translations, and verified Docker containers. Design work and GKE are explicitly excluded by the user.
+
+## Functional verification
+
+- Four backend tests pass: persistence, profile isolation, input validation, CRUD, deterministic scoring, and exclusion of synthetic history.
+- Flutter static analysis and word-recall/localization tests pass.
+- Reviewer browser checks pass for profile creation, memory editing, both newer games, persisted results, and Hindi/Assamese forms and recall words.
+- Application copy, dialog controls, game instructions/results, and activity explanations support English, Hindi, and Assamese. User-entered names, notes, and memories retain their original text; translations have not had native-speaker editorial review.
+- Docker verification passed: https://github.com/quiltrooper/memory-mate/actions/runs/34816899662
+
+Run the Python tests from `backend`, Flutter tests from `flutter_app`, and browser scripts from the repository root. Browser scripts expect the compiled frontend at 3002 and an isolated API/database at 8001, with Playwright and a Chromium browser installed.
 
 ## Deterministic activity model
 
@@ -8,7 +18,7 @@ Scope: Flutter, Python FastAPI, SQLite, deterministic profile-based activity ass
 
 Game difficulty uses the last three recorded rounds of that game: mean accuracy at least 85% increases one level; below 55% decreases one; levels remain 1–3. Age and diagnosis do not silently alter the score. The backend receives game counts from the client; it is not an anti-cheat system.
 
-## Figma
+## Figma — excluded from current scope
 
 Editable file: https://www.figma.com/design/Q0GrCFIwhprgCRJ8KlEqC4
 
@@ -18,6 +28,6 @@ The Figma Starter MCP quota was exhausted after the desktop draft and mobile can
 
 `docker compose up --build -d --wait` builds Flutter in a Linux build stage and serves it through Nginx on http://localhost:3002. `/api` is proxied to FastAPI. SQLite lives in a named volume, and the backend has a health check. The API port is not published directly. `docker compose down` preserves the database volume; `down -v` erases it and is only appropriate for disposable test environments.
 
-The GitHub `Verify Docker demo` workflow builds both containers and checks 103 seeded patients plus reminder persistence after an API-container restart. Check its actual result before claiming verified container execution. Local Docker is not installed. No GKE resources are created.
+The GitHub `Verify Docker demo` workflow builds both containers and checks 103 seeded patients plus reminder persistence after an API-container restart. Run 34816899662 passed these checks on GitHub. Local Docker is not installed. No GKE resources are created.
 
 The container stack is a local demo bound to loopback. Public hosting and authentication are not configured by this work.
