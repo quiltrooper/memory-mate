@@ -42,10 +42,12 @@ flowchart TD
 
 ## Boundaries that remain
 
-Live Gemini service verification awaits explicit permission to send fictional activity metrics and reminder counts. Key configuration alone does not prove a successful provider response. Microphone, speech voices and the installation prompt depend on the user's browser/device and have not been verified with their hardware. Translation key coverage is tested; native-speaker editorial review is not done.
+Live Gemini testing was approved for fictional metrics only on 15 September. Model listing succeeded, but generation returned provider HTTP 503 after an earlier timeout. Live generation remains unverified; approval is no longer the blocker. Microphone, speech voices and the installation prompt depend on the user's browser/device and have not been verified with their hardware. Translation key coverage is tested; native-speaker editorial review is not done.
 
 Original browser records are not silently imported: use the older version's backup export and the current restore flow. Imported legacy sessions are preserved without pretending that missing raw game measurements can be reconstructed. The PIN is a local browser gate; public hosting/server authentication are outside this local-demo task.
 
 Do not count excluded design work or GKE as unfinished functional parity. Do not call the live AI or device-dependent checks verified merely because their code exists.
 
 Final container verification: functional commit 4ad2c08 passed [GitHub run 34976728313](https://github.com/quiltrooper/memory-mate/actions/runs/34976728313), including frontend/API availability and SQLite reminder persistence after restart. Local frontend returned HTTP 200 and the actual database retained 103 patients.
+
+For the later India nursing-home rollout on multiple staff devices, see [NURSING_HOME_ROADMAP.md](NURSING_HOME_ROADMAP.md). Functional prototype parity does not establish production readiness.
