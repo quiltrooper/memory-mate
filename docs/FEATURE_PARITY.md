@@ -47,3 +47,5 @@ Live Gemini service verification awaits explicit permission to send fictional ac
 Original browser records are not silently imported: use the older version's backup export and the current restore flow. Imported legacy sessions are preserved without pretending that missing raw game measurements can be reconstructed. The PIN is a local browser gate; public hosting/server authentication are outside this local-demo task.
 
 Do not count excluded design work or GKE as unfinished functional parity. Do not call the live AI or device-dependent checks verified merely because their code exists.
+
+Final container verification: functional commit 4ad2c08 passed [GitHub run 34976728313](https://github.com/quiltrooper/memory-mate/actions/runs/34976728313), including frontend/API availability and SQLite reminder persistence after restart. Local frontend returned HTTP 200 and the actual database retained 103 patients.

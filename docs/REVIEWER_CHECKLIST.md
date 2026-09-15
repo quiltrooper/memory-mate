@@ -10,7 +10,7 @@ See [FEATURE_PARITY.md](FEATURE_PARITY.md) for the current old-versus-new compar
 - Flutter static analysis and word-recall/localization tests pass.
 - Reviewer browser checks pass for profile creation, memory editing, both newer games, persisted results, and Hindi/Assamese forms and recall words.
 - Application copy, dialog controls, game instructions/results, and activity explanations support English, Hindi, and Assamese. User-entered names, notes, and memories retain their original text; translations have not had native-speaker editorial review.
-- Docker verification passed: https://github.com/quiltrooper/memory-mate/actions/runs/34816899662
+- Docker verification passed: https://github.com/quiltrooper/memory-mate/actions/runs/34976728313
 
 Run the Python tests from `backend`, Flutter tests from `flutter_app`, and browser scripts from the repository root. Browser scripts expect the compiled frontend at 3002 and an isolated API/database at 8003, with Playwright and a Chromium browser installed.
 
@@ -30,6 +30,6 @@ The Figma Starter MCP quota was exhausted after the desktop draft and mobile can
 
 `docker compose up --build -d --wait` builds Flutter in a Linux build stage and serves it through Nginx on http://localhost:3002. `/api` is proxied to FastAPI. SQLite lives in a named volume, and the backend has a health check. The API port is not published directly. `docker compose down` preserves the database volume; `down -v` erases it and is only appropriate for disposable test environments.
 
-The GitHub `Verify Docker demo` workflow builds both containers and checks 103 seeded patients plus reminder persistence after an API-container restart. Run 34816899662 passed these checks on GitHub. Local Docker is not installed. No GKE resources are created.
+The GitHub `Verify Docker demo` workflow builds both containers and checks 103 seeded patients plus reminder persistence after an API-container restart. Run 34976728313 passed these checks on GitHub. Local Docker is not installed. No GKE resources are created.
 
 The container stack is a local demo bound to loopback. Public hosting and authentication are not configured by this work.
