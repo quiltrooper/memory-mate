@@ -1,3 +1,9 @@
+import 'dart:async';
+import 'api_service.dart';
+import 'browser_bridge.dart';
+import 'care_dashboard.dart';
+import 'memory_assistant.dart';
+import 'pin_gate.dart';
 import 'common.dart';
 import 'games.dart';
 import 'dialogs.dart';
@@ -7,7 +13,6 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/semantics.dart';
-import 'package:http/http.dart' as http;
 
 void main() {
   runApp(const MemoryMate());
@@ -30,7 +35,7 @@ class MemoryMate extends StatelessWidget {
       appBarTheme: const AppBarTheme(backgroundColor: Color(0xFFFAF8F3)),
       cardTheme: const CardThemeData(elevation: 0, color: Colors.white),
     ),
-    home: const Home(),
+    home: const PinGate(child: Home()),
   );
 }
 
@@ -50,6 +55,10 @@ class _HomeState extends State<Home> {
   int tab = 0;
   int requestId = 0;
   String search = '';
+  bool caregiver = false;
+  String? aiSummary;
+  final Map<String, String> memoryPrompts = {};
+  Timer? syncTimer;
   String get language =>
       patient?['profile']?['preferences']?['language'] ?? 'en';
   String t(String text, [Map<String, Object?> values = const {}]) =>
@@ -57,28 +66,41 @@ class _HomeState extends State<Home> {
   @override
   void initState() {
     super.initState();
+    selected = browserCall('get', {'key': 'mm_flutter_selected'});
+    ApiService.changed.addListener(apiChanged);
     loadPatients();
+    syncTimer = Timer.periodic(
+      const Duration(seconds: 30),
+      (_) => syncPending(),
+    );
+    syncPending();
+  }
+
+  void apiChanged() {
+    if (mounted) setState(() {});
+  }
+
+  @override
+  void dispose() {
+    syncTimer?.cancel();
+    ApiService.changed.removeListener(apiChanged);
+    super.dispose();
+  }
+
+  Future<void> syncPending() async {
+    final had = ApiService.queue.isNotEmpty;
+    await ApiService.sync();
+    if (had && ApiService.queue.isEmpty && mounted && !saving) {
+      await loadPatients();
+    }
   }
 
   Future<dynamic> request(String path, {Map<String, dynamic>? body}) async {
-    final uri = Uri.parse('$apiBase$path');
-    final response =
-        await (body == null
-                ? http.get(uri)
-                : http.patch(
-                    uri,
-                    headers: {'Content-Type': 'application/json'},
-                    body: jsonEncode(body),
-                  ))
-            .timeout(const Duration(seconds: 10));
-    if (response.statusCode >= 400) {
-      throw Exception(
-        response.statusCode == 409
-            ? t('This reminder changed elsewhere. Refresh and try again.')
-            : t('Could not save or load this record ({status}).', {'status':response.statusCode}),
-      );
-    }
-    return jsonDecode(response.body);
+    return ApiService.send(
+      path,
+      method: body == null ? 'GET' : 'PATCH',
+      body: body,
+    );
   }
 
   Future<void> loadPatients() async {
@@ -87,6 +109,7 @@ class _HomeState extends State<Home> {
       error = null;
     });
     try {
+      if (selected != null) selected = ApiService.resolve(selected!);
       final rows = await request('/api/patients') as List<dynamic>;
       if (!mounted) return;
       setState(() {
@@ -99,7 +122,12 @@ class _HomeState extends State<Home> {
         });
         return;
       }
-      await selectPatient(selected ?? rows.first['profile']['id']);
+      await selectPatient(
+        rows.any((p) => p['profile']['id'] == selected)
+            ? selected!
+            : rows.first['profile']['id'],
+      );
+      unawaited(ApiService.prefetch());
     } catch (_) {
       if (mounted) {
         setState(() {
@@ -118,12 +146,25 @@ class _HomeState extends State<Home> {
       loading = true;
       error = null;
       patient = null;
+      aiSummary = null;
+      memoryPrompts.clear();
     });
     try {
       final result = await request('/api/patients/$id');
       if (mounted && current == requestId) {
         setState(() {
           patient = Map<String, dynamic>.from(result);
+          patients = patients
+              .map(
+                (p) => p['profile']['id'] == id
+                    ? {
+                        'profile': patient!['profile'],
+                        'dataSource': patient!['dataSource'],
+                      }
+                    : p,
+              )
+              .toList();
+          browserCall('set', {'key': 'mm_flutter_selected', 'value': id});
           loading = false;
         });
       }
@@ -180,6 +221,7 @@ class _HomeState extends State<Home> {
       'time': t('Time'),
       'category': t('Category'),
       'notes': t('Notes'),
+      'assignedBy': t('Assigned by'),
     };
     final result = await recordDialog(
       context,
@@ -200,20 +242,7 @@ class _HomeState extends State<Home> {
     String method,
     Map<String, dynamic>? body,
   ) async {
-    final message = http.Request(method, Uri.parse('$apiBase$path'));
-    message.headers['Content-Type'] = 'application/json';
-    if (body != null) message.body = jsonEncode(body);
-    final response = await http.Response.fromStream(
-      await message.send(),
-    ).timeout(const Duration(seconds: 10));
-    if (response.statusCode >= 400) {
-      throw Exception(
-        response.statusCode == 409
-            ? t('Record changed elsewhere. Refresh and retry.')
-            : t('Please check the supplied fields. ({status})', {'status':response.statusCode}),
-      );
-    }
-    return jsonDecode(response.body);
+    return ApiService.send(path, method: method, body: body);
   }
 
   Future<void> updateRecord(
@@ -249,6 +278,10 @@ class _HomeState extends State<Home> {
         'location',
         'primaryCaregiver',
         'notes',
+        'gender',
+        'diagnosis',
+        'ashaWorker',
+        'hospital',
       ])
         key: '${profile[key] ?? ''}',
       'language': prefs['language'] ?? 'en',
@@ -265,6 +298,10 @@ class _HomeState extends State<Home> {
         'location': t('Location'),
         'primaryCaregiver': t('Caregiver'),
         'notes': t('Notes'),
+        'gender': t('Gender'),
+        'diagnosis': t('Recorded condition'),
+        'ashaWorker': t('ASHA worker'),
+        'hospital': t('Hospital'),
         'language': t('Language'),
         'largeText': t('Large text'),
         'responseGoalMs': t('Comfortable response pace (ms)'),
@@ -285,7 +322,10 @@ class _HomeState extends State<Home> {
       'location': result['location'],
       'primaryCaregiver': result['primaryCaregiver'],
       'notes': result['notes'],
-      'gender': profile['gender'] ?? 'Not specified',
+      'gender': result['gender'] ?? 'Not specified',
+      'diagnosis': result['diagnosis'] ?? '',
+      'ashaWorker': result['ashaWorker'] ?? '',
+      'hospital': result['hospital'] ?? '',
       'preferences': {
         'language': result['language'],
         'largeText': result['largeText'] == 'true',
@@ -318,8 +358,18 @@ class _HomeState extends State<Home> {
     final result = await recordDialog(
       context,
       t('Add reminder'),
-      {'title': t('Title'), 'time': t('Time'), 'category': t('Category')},
-      {'category': 'routine', 'time': '09:00 AM'},
+      {
+        'title': t('Title'),
+        'time': t('Time'),
+        'category': t('Category'),
+        'notes': t('Notes'),
+        'assignedBy': t('Assigned by'),
+      },
+      {
+        'category': 'routine',
+        'time': '09:00 AM',
+        'assignedBy': patient!['profile']['primaryCaregiver'] ?? '',
+      },
       language: language,
       requiredFields: {'title', 'time'},
       options: {
@@ -329,7 +379,7 @@ class _HomeState extends State<Home> {
     if (result != null && mounted) {
       await updateRecord('/api/patients/$selected/reminders', 'POST', {
         ...result,
-        'assignedBy': patient!['profile']['primaryCaregiver'],
+        'assignedBy': result['assignedBy'],
       });
     }
   }
@@ -380,6 +430,213 @@ class _HomeState extends State<Home> {
     if (approved == true && mounted) await updateRecord(path, 'DELETE', null);
   }
 
+  Future<void> reviewPending({bool discard = false}) async {
+    if (ApiService.queue.isEmpty) return;
+    final q = ApiService.queue.first;
+    final approved = await showDialog<bool>(
+      context: context,
+      builder: (c) => AlertDialog(
+        title: Text(t('Review pending changes')),
+        content: Text(
+          discard
+              ? t(
+                  'Export pending changes and discard the device queue? Server records stay unchanged.',
+                )
+              : '${q['method']} ${q['path']}\n${t('Keep your queued values over the latest server version?')}',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(c, false),
+            child: Text(t('Cancel')),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(c, true),
+            child: Text(t(discard ? 'Export and discard' : 'Keep my change')),
+          ),
+        ],
+      ),
+    );
+    if (approved != true) return;
+    try {
+      if (discard) {
+        ApiService.discardPending();
+        await loadPatients();
+      } else {
+        await ApiService.rebaseFirst();
+        await syncPending();
+      }
+    } catch (e) {
+      notice(e.toString());
+    }
+  }
+
+  void notice(String text) {
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(text)));
+    }
+  }
+
+  void readText(String text) {
+    final warning = browserCall('speak', {'text': text, 'language': language});
+    if (warning is String && warning.isNotEmpty) notice(warning);
+  }
+
+  Future<void> exportData({bool all = false}) async {
+    try {
+      final data = all
+          ? await ApiService.backup()
+          : {
+              'format': 'memory-mate-backup',
+              'version': 3,
+              'exportedAt': DateTime.now().toUtc().toIso8601String(),
+              'patients': [patient!],
+            };
+      browserCall('download', {
+        'name': all
+            ? 'memory-mate-backup.json'
+            : 'memory-mate-patient-$selected.json',
+        'text': const JsonEncoder.withIndent('  ').convert(data),
+      });
+    } catch (e) {
+      notice(e.toString());
+    }
+  }
+
+  Future<void> restoreData() async {
+    if (ApiService.queue.isNotEmpty) {
+      notice(t('Sync pending changes before restoring a backup.'));
+      return;
+    }
+    try {
+      final text = await browserAsync('file', {'image': false});
+      if (text == null) return;
+      final backup = jsonDecode(text);
+      if (backup is! Map ||
+          backup['format'] != 'memory-mate-backup' ||
+          backup['patients'] is! List) {
+        throw Exception(t('Invalid backup'));
+      }
+      final current = await ApiService.send('/api/backup');
+      if (!mounted) return;
+      final approved = await recordDialog(
+        context,
+        t(
+          'Restore {count} profiles? Matching profiles will be replaced; other profiles stay.',
+          {'count': (backup['patients'] as List).length},
+        ),
+        {'confirm': t('Type RESTORE to confirm')},
+        {},
+        language: language,
+        requiredFields: {'confirm'},
+      );
+      if (approved?['confirm'] != 'RESTORE') return;
+      final result = await ApiService.send(
+        '/api/restore',
+        method: 'POST',
+        body: {'backup': backup, 'expectedDigest': current['digest']},
+      );
+      notice(
+        '${t('Restored profiles')}: ${result['restored']}. ${t('Recovery copy')}: ${result['recoveryFile']}',
+      );
+      await loadPatients();
+    } catch (e) {
+      notice(e.toString());
+    }
+  }
+
+  Future<void> faceForm([Map<String, dynamic>? face]) async {
+    final result = await recordDialog(
+      context,
+      t(face == null ? 'Add family photo' : 'Edit photo label'),
+      {
+        'name': t('Name'),
+        'relationship': t('Relationship'),
+        'location': t('Location'),
+        'notes': t('Notes'),
+        'photoUrl': t('Photo URL (optional)'),
+      },
+      {
+        for (final k in [
+          'name',
+          'relationship',
+          'location',
+          'notes',
+          'photoUrl',
+        ])
+          k: '${face?[k] ?? ''}',
+      },
+      language: language,
+      requiredFields: {'name'},
+    );
+    if (result == null || !mounted) return;
+    await updateRecord(
+      '/api/patients/$selected/faces${face == null ? '' : '/${face['id']}'}',
+      face == null ? 'POST' : 'PATCH',
+      {...result, 'version': patient!['version']},
+    );
+  }
+
+  Future<void> summary() async {
+    setState(() => saving = true);
+    try {
+      final result = await ApiService.send(
+        '/api/patients/$selected/summary',
+        method: 'POST',
+        body: {'language': language},
+      );
+      if (mounted) setState(() => aiSummary = result['reply']);
+    } catch (_) {
+      if (mounted) {
+        setState(
+          () => aiSummary = t(
+            'Optional AI unavailable. The measured summary above remains available.',
+          ),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => saving = false);
+    }
+  }
+
+  Future<void> memoryPrompt(dynamic memory) async {
+    final id = memory['id'];
+    setState(() => saving = true);
+    String prompt;
+    try {
+      final result = await ApiService.send(
+        '/api/patients/$selected/reminiscence',
+        method: 'POST',
+        body: {'language': language, 'memoryId': id},
+      );
+      prompt = result['reply'];
+    } catch (_) {
+      prompt = t('What would you like to share about this memory?');
+    }
+    if (mounted) {
+      setState(() {
+        memoryPrompts[id] = prompt;
+        saving = false;
+      });
+      readText(prompt);
+    }
+  }
+
+  Widget caregiverView() => CareDashboard(
+    patient: patient!,
+    language: language,
+    assessment: assessmentPanel(),
+    reminders: reminderList(),
+    onAddReminder: addReminder,
+    onExport: () => exportData(),
+    onExportAll: () => exportData(all: true),
+    onBackup: () => exportData(all: true),
+    onRestore: restoreData,
+    onRead: () => readText(CareDashboard.facts(patient!, language)),
+    onSummary: summary,
+    aiSummary: aiSummary,
+    busy: saving,
+  );
+
   Widget assessmentPanel() {
     final result = patient!['assessment'] as Map<String, dynamic>;
     return Card(
@@ -411,6 +668,29 @@ class _HomeState extends State<Home> {
                 'An activity estimate, not a diagnosis. Synthetic history is excluded.',
               ),
             ),
+            if (ApiService.queue.isNotEmpty)
+              Text(
+                t(
+                  'Pending activity is not included in the assessment until synced.',
+                ),
+              ),
+            if ((result['components'] as Map).isNotEmpty)
+              Wrap(
+                spacing: 16,
+                runSpacing: 8,
+                children: [
+                  Text(
+                    '${t('Error component')}: ${result['components']['errorComponent']} × 60%',
+                  ),
+                  Text(
+                    '${t('Pace component')}: ${result['components']['paceComponent']} × 25%',
+                  ),
+                  Text(
+                    '${t('Weekly goal shortfall')}: ${result['components']['consistencyComponent']} × 15%',
+                  ),
+                ],
+              ),
+            Text('${t('Model')}: ${result['modelVersion']}'),
             ExpansionTile(
               title: Text(t('How this is calculated')),
               children: [
@@ -473,6 +753,11 @@ class _HomeState extends State<Home> {
                         fontWeight: FontWeight.w600,
                       ),
                     ),
+                    Text(
+                      '${t(reminder['category'])} · ${t(reminder['completed'] == true ? 'Complete' : 'Pending')}',
+                    ),
+                    if ((reminder['notes'] ?? '').toString().isNotEmpty)
+                      Text(reminder['notes']),
                     const SizedBox(height: 5),
                     Text(
                       '${reminder['time']} · ${reminder['assignedBy'] ?? 'Caregiver'}',
@@ -562,6 +847,33 @@ class _HomeState extends State<Home> {
         ),
         const SizedBox(height: 12),
         reminderList(),
+        const SizedBox(height: 16),
+        Text(
+          t('What would you like to do?'),
+          style: const TextStyle(fontSize: 22),
+        ),
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: [
+            FilledButton(
+              onPressed: () => setState(() => tab = 4),
+              child: Text(t('I need help')),
+            ),
+            OutlinedButton(
+              onPressed: () => setState(() => tab = 3),
+              child: Text(t('Games')),
+            ),
+            OutlinedButton(
+              onPressed: () => setState(() => tab = 2),
+              child: Text(t('Memories')),
+            ),
+            OutlinedButton(
+              onPressed: () => setState(() => tab = 1),
+              child: Text(t('Reminders')),
+            ),
+          ],
+        ),
       ],
     );
   }
@@ -635,6 +947,21 @@ class _HomeState extends State<Home> {
                         ),
                       ],
                     ),
+                    Wrap(
+                      spacing: 8,
+                      children: [
+                        TextButton(
+                          onPressed: () => readText(memory['caption']),
+                          child: Text(t('Read aloud')),
+                        ),
+                        TextButton(
+                          onPressed: saving ? null : () => memoryPrompt(memory),
+                          child: Text(t('Talk about this memory')),
+                        ),
+                      ],
+                    ),
+                    if (memoryPrompts[memory['id']] != null)
+                      Text(memoryPrompts[memory['id']]!),
                     Text(
                       memory['caption'],
                       style: const TextStyle(fontSize: 17, height: 1.5),
@@ -692,12 +1019,13 @@ class _HomeState extends State<Home> {
                           ),
                         ),
                       ),
-                    if (tab == 0) ...[
+                    if (caregiver) caregiverView(),
+                    if (!caregiver && tab == 0) ...[
                       assessmentPanel(),
                       const SizedBox(height: 16),
                       dashboard(),
                     ],
-                    if (tab == 1) ...[
+                    if (!caregiver && tab == 1) ...[
                       heading('Reminders', 'Small steps for a familiar day.'),
                       FilledButton.icon(
                         onPressed: saving ? null : addReminder,
@@ -707,7 +1035,7 @@ class _HomeState extends State<Home> {
                       const SizedBox(height: 12),
                       reminderList(),
                     ],
-                    if (tab == 2) ...[
+                    if (!caregiver && tab == 2) ...[
                       FilledButton.icon(
                         onPressed: saving ? null : () => memoryForm(),
                         icon: const Icon(Icons.add),
@@ -716,7 +1044,18 @@ class _HomeState extends State<Home> {
                       const SizedBox(height: 12),
                       memories(),
                     ],
-                    if (tab == 3)
+                    if (!caregiver && tab == 4)
+                      MemoryAssistant(
+                        key: ValueKey('assistant-$selected'),
+                        patient: patient!,
+                        language: language,
+                        onAddFace: () => faceForm(),
+                        onEditFace: (f) => faceForm(f),
+                        onDeleteFace: (f) => removeRecord(
+                          '/api/patients/$selected/faces/${f['id']}?version=${patient!['version']}',
+                        ),
+                      ),
+                    if (!caregiver && tab == 3)
                       GameHub(
                         key: ValueKey(selected),
                         patientId: selected!,
@@ -747,14 +1086,24 @@ class _HomeState extends State<Home> {
               SizedBox(width: 10),
               Text(
                 'Memory Mate',
-                style: TextStyle(
-                  fontWeight: FontWeight.bold,
-                  color: forest,
-                ),
+                style: TextStyle(fontWeight: FontWeight.bold, color: forest),
               ),
             ],
           ),
           actions: [
+            IconButton(
+              tooltip: t('Lock'),
+              onPressed: () => PinGate.lock(context),
+              icon: const Icon(Icons.lock_outline),
+            ),
+            IconButton(
+              tooltip: t('Install app'),
+              onPressed: () async {
+                final result = await browserAsync('install');
+                if (result is String && result.isNotEmpty) notice(result);
+              },
+              icon: const Icon(Icons.install_mobile),
+            ),
             IconButton(
               tooltip: t('Refresh records'),
               onPressed: saving ? null : loadPatients,
@@ -764,6 +1113,77 @@ class _HomeState extends State<Home> {
         ),
         body: Column(
           children: [
+            Padding(
+              padding: const EdgeInsets.all(8),
+              child: Wrap(
+                spacing: 8,
+                runSpacing: 4,
+                alignment: WrapAlignment.center,
+                children: [
+                  ChoiceChip(
+                    label: Text(t('Patient mode')),
+                    selected: !caregiver,
+                    onSelected: (_) => setState(() => caregiver = false),
+                  ),
+                  ChoiceChip(
+                    label: Text(t('Caregiver mode')),
+                    selected: caregiver,
+                    onSelected: (_) => setState(() => caregiver = true),
+                  ),
+                  FilterChip(
+                    label: Text(t('Offline mode')),
+                    selected: ApiService.forcedOffline,
+                    onSelected: (_) {
+                      ApiService.toggleOffline();
+                      loadPatients();
+                    },
+                  ),
+                ],
+              ),
+            ),
+            if (ApiService.offline ||
+                ApiService.forcedOffline ||
+                ApiService.queue.isNotEmpty ||
+                ApiService.syncError != null)
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 12),
+                child: Column(
+                  children: [
+                    Text(
+                      '${t(ApiService.offline || ApiService.forcedOffline ? 'Using saved device records' : 'Connected')} · ${ApiService.queue.length} ${t('pending changes')}',
+                    ),
+                    if (ApiService.syncError != null)
+                      Text(ApiService.syncError!),
+                    if (ApiService.queue.isNotEmpty)
+                      Wrap(
+                        spacing: 8,
+                        children: [
+                          TextButton(
+                            onPressed: ApiService.exportPending,
+                            child: Text(t('Export pending changes')),
+                          ),
+                          if (ApiService.syncError != null)
+                            TextButton(
+                              onPressed: () => reviewPending(),
+                              child: Text(t('Review pending changes')),
+                            ),
+                          TextButton(
+                            onPressed: ApiService.syncing
+                                ? null
+                                : () => reviewPending(discard: true),
+                            child: Text(t('Export and discard')),
+                          ),
+                        ],
+                      ),
+                    TextButton(
+                      onPressed: ApiService.syncing || ApiService.forcedOffline
+                          ? null
+                          : syncPending,
+                      child: Text(t('Sync now')),
+                    ),
+                  ],
+                ),
+              ),
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 20),
               child: TextField(
@@ -833,7 +1253,7 @@ class _HomeState extends State<Home> {
             Expanded(
               child: Row(
                 children: [
-                  if (wide)
+                  if (wide && !caregiver)
                     NavigationRail(
                       selectedIndex: tab,
                       onDestinationSelected: (value) => setState(() {
@@ -857,6 +1277,10 @@ class _HomeState extends State<Home> {
                           icon: Icon(Icons.extension_outlined),
                           label: Text(t('Games')),
                         ),
+                        NavigationRailDestination(
+                          icon: Icon(Icons.chat_bubble_outline),
+                          label: Text(t('Assistant')),
+                        ),
                       ],
                     ),
                   Expanded(child: content),
@@ -865,7 +1289,7 @@ class _HomeState extends State<Home> {
             ),
           ],
         ),
-        bottomNavigationBar: wide
+        bottomNavigationBar: wide || caregiver
             ? null
             : NavigationBar(
                 selectedIndex: tab,
@@ -888,6 +1312,10 @@ class _HomeState extends State<Home> {
                   NavigationDestination(
                     icon: Icon(Icons.extension_outlined),
                     label: t('Games'),
+                  ),
+                  NavigationDestination(
+                    icon: Icon(Icons.chat_bubble_outline),
+                    label: t('Assistant'),
                   ),
                 ],
               ),

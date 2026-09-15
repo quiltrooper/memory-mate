@@ -1,3 +1,5 @@
+import {unlock} from './browser-common.mjs';
+const testApi=process.env.TEST_API_URL||'http://127.0.0.1:8003';
 import assert from 'node:assert/strict';
 const { chromium } = await import(process.env.PLAYWRIGHT_MODULE || 'playwright');
 const browser = await chromium.launch({executablePath: process.env.BROWSER_EXECUTABLE, headless: true});
@@ -6,16 +8,16 @@ try {
   const errors = [];
   page.on('pageerror', error => errors.push(error.message));
   await page.route('http://127.0.0.1:8000/api/**', async route => {
-    const response = await route.fetch({url: route.request().url().replace(':8000/', ':8001/')});
+    const response = await route.fetch({url: route.request().url().replace('http://127.0.0.1:8000',testApi)});
     await route.fulfill({response});
   });
-  await page.goto(process.env.FLUTTER_URL || 'http://127.0.0.1:3002');
+  await page.goto(process.env.FLUTTER_URL || 'http://127.0.0.1:3002');await unlock(page);
   await page.getByRole('button', {name: 'Edit reminder'}).first().waitFor({timeout: 60000});
   await page.getByRole('button', {name: 'Edit reminder'}).first().click();
   await page.getByRole('textbox', {name: 'Title', exact: true}).fill('Browser persistence check');
   await page.getByRole('button', {name: 'Save', exact: true}).click();
   await page.getByText('Reminder saved', {exact: true}).waitFor();
-  await page.reload();
+  await page.reload();await unlock(page);
   await page.getByRole('button', {name: 'Edit reminder'}).first().waitFor({timeout: 30000});
   assert.match(await page.locator('body').ariaSnapshot(), /Browser persistence check/);
   assert.doesNotMatch(await page.locator('body').ariaSnapshot(), /\u00c2\u00b7/);
@@ -26,7 +28,7 @@ try {
   await page.getByRole('button', {name: 'Edit reminder'}).first().waitFor();
   assert.doesNotMatch(await page.locator('body').ariaSnapshot(), /Browser persistence check/);
   console.log('PASS switching patients keeps reminder records separate');
-  await page.getByRole('button', {name: 'Games Tab 4 of 4'}).click();
+  await page.getByRole('button', {name: 'Games Tab 4 of 5'}).click();
   await page.getByRole('button', {name: 'Start word recall'}).click();
   await page.getByRole('button', {name: 'Check my words'}).waitFor();
   const savedResponse = page.waitForResponse(response => response.url().endsWith('/sessions') && response.request().method() === 'POST');

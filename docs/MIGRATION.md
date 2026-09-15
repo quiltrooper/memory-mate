@@ -2,6 +2,8 @@
 
 The original React/Express source is preserved and can be started separately on port 3000. The migration lives in `backend/` and `flutter_app/` on `main`.
 
+The Flutter application now includes the caregiver dashboard, assistant and labeled photos, backup restore, local PIN and offline queue. See [FEATURE_PARITY.md](FEATURE_PARITY.md) for verification and remaining external checks. Older browser data can be transferred explicitly through JSON backup restore.
+
 ## Run the Python service (Windows)
 
 From `backend`:

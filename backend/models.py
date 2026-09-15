@@ -17,6 +17,9 @@ class ProfileInput(StrictModel):
     location: str = Field(default='', max_length=200)
     primaryCaregiver: str = Field(default='', max_length=120)
     notes: str = Field(default='', max_length=2000)
+    diagnosis: str = Field(default='Not assessed', max_length=200)
+    ashaWorker: str = Field(default='', max_length=120)
+    hospital: str = Field(default='', max_length=200)
     preferences: Preferences = Field(default_factory=Preferences)
 
 class ProfileUpdate(ProfileInput):

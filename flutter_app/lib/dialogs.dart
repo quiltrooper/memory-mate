@@ -103,11 +103,53 @@ class _RecordDialogState extends State<RecordDialog> {
                             labelText: entry.value,
                             border: const OutlineInputBorder(),
                           ),
-                          validator: (v) =>
-                              widget.requiredFields.contains(entry.key) &&
-                                  (v == null || v.trim().isEmpty)
-                              ? translate(widget.language, 'Required')
-                              : null,
+                          validator: (v) {
+                            final text = v?.trim() ?? '';
+                            if (widget.requiredFields.contains(entry.key) &&
+                                text.isEmpty) {
+                              return translate(widget.language, 'Required');
+                            }
+                            final bounds = {
+                              'age': [1, 120],
+                              'responseGoalMs': [1000, 30000],
+                              'weeklyGoalDays': [1, 7],
+                            }[entry.key];
+                            if (bounds != null) {
+                              final number = int.tryParse(text);
+                              if (number == null ||
+                                  number < bounds[0] ||
+                                  number > bounds[1]) {
+                                return '${bounds[0]}–${bounds[1]}';
+                              }
+                            }
+                            if (['imageUrl', 'photoUrl'].contains(entry.key) &&
+                                text.isNotEmpty &&
+                                !text.startsWith('https://') &&
+                                !(entry.key == 'photoUrl' &&
+                                    RegExp(
+                                      r'^data:image/(png|jpeg|webp);base64,[A-Za-z0-9+/=]+$',
+                                    ).hasMatch(text))) {
+                              return 'HTTPS URL';
+                            }
+                            final limit = {
+                              'name': 120,
+                              'title': 200,
+                              'caption': 2000,
+                              'notes': 1000,
+                              'time': 30,
+                              'location': 200,
+                              'primaryCaregiver': 120,
+                              'assignedBy': 120,
+                              'relationship': 120,
+                              'ashaWorker': 120,
+                              'hospital': 200,
+                              'diagnosis': 200,
+                            }[entry.key];
+                            if (limit != null && text.length > limit) {
+                              return '${text.length} / $limit';
+                            }
+                            return null;
+                          },
                         ),
                 ),
             ],

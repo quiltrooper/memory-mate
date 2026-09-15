@@ -1,8 +1,8 @@
 import 'dart:async';
-import 'dart:convert';
+import 'api_service.dart';
 import 'dart:math';
 import 'package:flutter/material.dart';
-import 'package:http/http.dart' as http;
+
 import 'common.dart';
 import 'translations.dart';
 
@@ -32,6 +32,7 @@ class _WordGameState extends State<WordGame> {
   final Set<String> answers = {};
   final stopwatch = Stopwatch();
   final activityId = DateTime.now().microsecondsSinceEpoch.toString();
+  final occurredAt = DateTime.now().toUtc().toIso8601String();
   bool saving = false;
   bool saved = false;
   String? error;
@@ -85,22 +86,19 @@ class _WordGameState extends State<WordGame> {
       error = null;
     });
     try {
-      final response = await http
-          .post(
-            Uri.parse('$apiBase/api/patients/${widget.patientId}/sessions'),
-            headers: {'Content-Type': 'application/json'},
-            body: jsonEncode({
-              'activity_id': activityId,
-              'game_type': 'word',
-              'correct': answers.where(targets.contains).length,
-              'attempts': targets.length,
-              'response_time_ms':
-                  stopwatch.elapsedMilliseconds ~/ targets.length,
-              'level': level,
-            }),
-          )
-          .timeout(const Duration(seconds: 10));
-      if (response.statusCode != 201) throw Exception('Save failed');
+      await ApiService.send(
+        '/api/patients/${widget.patientId}/sessions',
+        method: 'POST',
+        body: {
+          'activity_id': activityId,
+          'game_type': 'word',
+          'correct': answers.where(targets.contains).length,
+          'attempts': targets.length,
+          'response_time_ms': stopwatch.elapsedMilliseconds ~/ targets.length,
+          'level': level,
+          'occurred_at': occurredAt,
+        },
+      );
       if (mounted) {
         setState(() {
           saved = true;
@@ -241,7 +239,13 @@ class _WordGameState extends State<WordGame> {
                 const SizedBox(height: 16),
                 if (saving) const CircularProgressIndicator(),
                 if (saved) ...[
-                  Text(t('Saved to your activity history.')),
+                  Text(
+                    t(
+                      ApiService.queue.isEmpty
+                          ? 'Saved to your activity history.'
+                          : 'Saved on this device; pending sync',
+                    ),
+                  ),
                   TextButton(
                     onPressed: widget.onSaved,
                     child: Text(t('Play again')),
@@ -380,6 +384,7 @@ class _SavedResultState extends State<SavedResult> {
   String t(String key, [Map<String, Object?> values = const {}]) =>
       translate(widget.language, key, values);
   final id = DateTime.now().microsecondsSinceEpoch.toString();
+  final occurredAt = DateTime.now().toUtc().toIso8601String();
   bool saving = true, saved = false;
   @override
   void initState() {
@@ -390,21 +395,19 @@ class _SavedResultState extends State<SavedResult> {
   Future<void> save() async {
     setState(() => saving = true);
     try {
-      final response = await http
-          .post(
-            Uri.parse('$apiBase/api/patients/${widget.patientId}/sessions'),
-            headers: {'Content-Type': 'application/json'},
-            body: jsonEncode({
-              'activity_id': id,
-              'game_type': widget.game,
-              'correct': widget.correct,
-              'attempts': widget.attempts,
-              'response_time_ms': widget.responseMs,
-              'level': widget.level,
-            }),
-          )
-          .timeout(const Duration(seconds: 10));
-      if (response.statusCode != 201) throw Exception('save');
+      await ApiService.send(
+        '/api/patients/${widget.patientId}/sessions',
+        method: 'POST',
+        body: {
+          'activity_id': id,
+          'game_type': widget.game,
+          'correct': widget.correct,
+          'attempts': widget.attempts,
+          'response_time_ms': widget.responseMs,
+          'level': widget.level,
+          'occurred_at': occurredAt,
+        },
+      );
       if (mounted) setState(() => saved = true);
     } catch (_) {
       if (mounted) setState(() => saved = false);
@@ -444,7 +447,13 @@ class _SavedResultState extends State<SavedResult> {
           Text(t('Activity measure only. This is not a diagnosis.')),
           if (saving) const LinearProgressIndicator(),
           if (!saving && saved) ...[
-            Text(t('Saved to your activity history.')),
+            Text(
+              t(
+                ApiService.queue.isEmpty
+                    ? 'Saved to your activity history.'
+                    : 'Saved on this device; pending sync',
+              ),
+            ),
             FilledButton(onPressed: widget.onSaved, child: Text(t('Continue'))),
           ],
           if (!saving && !saved) ...[

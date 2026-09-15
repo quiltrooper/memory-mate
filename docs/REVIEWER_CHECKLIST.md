@@ -2,15 +2,17 @@
 
 Current scope: Flutter, Python FastAPI, SQLite, deterministic profile-based activity assessment, functional UI, translations, and verified Docker containers. Design work and GKE are explicitly excluded by the user.
 
+See [FEATURE_PARITY.md](FEATURE_PARITY.md) for the current old-versus-new comparison, restored modules and external verification boundaries.
+
 ## Functional verification
 
-- Four backend tests pass: persistence, profile isolation, input validation, CRUD, deterministic scoring, and exclusion of synthetic history.
+- Nine backend tests pass: persistence, profile isolation, input validation, CRUD, deterministic scoring, and exclusion of synthetic history.
 - Flutter static analysis and word-recall/localization tests pass.
 - Reviewer browser checks pass for profile creation, memory editing, both newer games, persisted results, and Hindi/Assamese forms and recall words.
 - Application copy, dialog controls, game instructions/results, and activity explanations support English, Hindi, and Assamese. User-entered names, notes, and memories retain their original text; translations have not had native-speaker editorial review.
 - Docker verification passed: https://github.com/quiltrooper/memory-mate/actions/runs/34816899662
 
-Run the Python tests from `backend`, Flutter tests from `flutter_app`, and browser scripts from the repository root. Browser scripts expect the compiled frontend at 3002 and an isolated API/database at 8001, with Playwright and a Chromium browser installed.
+Run the Python tests from `backend`, Flutter tests from `flutter_app`, and browser scripts from the repository root. Browser scripts expect the compiled frontend at 3002 and an isolated API/database at 8003, with Playwright and a Chromium browser installed.
 
 ## Deterministic activity model
 

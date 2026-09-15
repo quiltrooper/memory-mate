@@ -7,6 +7,8 @@ from typing import Literal
 from datetime import datetime, timezone
 from uuid import uuid4
 from assessment import assess
+from parity import install, configure_env
+from durable_mutations import current_connection, install_receipts
 from models import ProfileInput, ProfileUpdate, ReminderInput, MemoryInput
 
 from fastapi import FastAPI, HTTPException
@@ -14,6 +16,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field, ConfigDict
 
 ROOT = Path(__file__).resolve().parent
+configure_env(ROOT)
 
 class ReminderUpdate(BaseModel):
     model_config = ConfigDict(extra='forbid')
@@ -27,6 +30,7 @@ class ReminderUpdate(BaseModel):
 
 class ActivityInput(BaseModel):
     model_config = ConfigDict(extra='forbid')
+    occurred_at: str | None = Field(default=None,max_length=60)
     activity_id: str = Field(min_length=1, max_length=100)
     game_type: Literal['word', 'pattern', 'matching']
     correct: int = Field(ge=0)
@@ -40,8 +44,12 @@ def create_app(database_path: str | Path | None = None) -> FastAPI:
 
     @contextmanager
     def database():
+        existing=current_connection.get()
+        if existing is not None:
+            yield existing
+            return
         db_path.parent.mkdir(parents=True, exist_ok=True)
-        connection = sqlite3.connect(db_path, timeout=10)
+        connection = sqlite3.connect(db_path, timeout=10, check_same_thread=False)
         connection.row_factory = sqlite3.Row
         connection.execute('PRAGMA foreign_keys=ON')
         try:
@@ -68,6 +76,7 @@ def create_app(database_path: str | Path | None = None) -> FastAPI:
                     patient_id TEXT NOT NULL REFERENCES patients(id),
                     payload TEXT NOT NULL
                 );
+                CREATE TABLE IF NOT EXISTS mutation_receipts (id TEXT PRIMARY KEY, fingerprint TEXT NOT NULL, status INTEGER NOT NULL, body BLOB NOT NULL);
                 PRAGMA user_version=1;
             ''')
             if 'version' not in [row[1] for row in db.execute('PRAGMA table_info(patients)')]:
@@ -81,7 +90,6 @@ def create_app(database_path: str | Path | None = None) -> FastAPI:
         yield
 
     app = FastAPI(title='Memory Mate API', version='0.1.0', lifespan=lifespan)
-    app.add_middleware(CORSMiddleware, allow_origins=os.environ.get('ALLOWED_ORIGINS', 'http://localhost:3002,http://127.0.0.1:3002').split(','), allow_methods=['GET','POST','PATCH','DELETE'], allow_headers=['Content-Type'])
 
     def patient_or_404(db, patient_id):
         row = db.execute('SELECT payload, version FROM patients WHERE id=?', (patient_id,)).fetchone()
@@ -108,7 +116,7 @@ def create_app(database_path: str | Path | None = None) -> FastAPI:
         with database() as db:
             result = patient_or_404(db, patient_id)
             result['reminders'] = [reminder_json(row) for row in db.execute('SELECT * FROM reminders WHERE patient_id=? ORDER BY id', (patient_id,))]
-            result['recordedSessions'] = [json.loads(row['payload']) for row in db.execute('SELECT payload FROM sessions WHERE patient_id=? ORDER BY rowid DESC', (patient_id,))]
+            result['recordedSessions'] = [json.loads(row['payload']) for row in db.execute("SELECT payload FROM sessions WHERE patient_id=? ORDER BY json_extract(payload, '$.timestamp') DESC, rowid DESC", (patient_id,))]
             result['assessment'] = assess(result['profile'], result['recordedSessions'])
             return result
 
@@ -135,8 +143,14 @@ def create_app(database_path: str | Path | None = None) -> FastAPI:
     def record_activity(patient_id: str, activity: ActivityInput):
         if activity.correct > activity.attempts:
             raise HTTPException(422, 'Correct answers cannot exceed attempts')
+        timestamp=datetime.now(timezone.utc)
+        if activity.occurred_at:
+            try:
+                timestamp=datetime.fromisoformat(activity.occurred_at.replace('Z','+00:00'))
+                if not timestamp.tzinfo or timestamp > datetime.now(timezone.utc): raise ValueError('Future timestamp')
+            except ValueError: raise HTTPException(422,'Invalid activity timestamp')
         score = round(activity.correct * 100 / activity.attempts, 2)
-        result = {**activity.model_dump(), 'id': f'{patient_id}:{activity.activity_id}', 'timestamp': datetime.now(timezone.utc).isoformat(), 'accuracy': score, 'errors': activity.attempts - activity.correct, 'score': score, 'dataSource': 'recorded', 'scoreSource': 'deterministic-v1'}
+        result = {**activity.model_dump(), 'id': f'{patient_id}:{activity.activity_id}', 'timestamp': timestamp.isoformat(), 'accuracy': score, 'errors': activity.attempts - activity.correct, 'score': score, 'dataSource': 'recorded', 'scoreSource': 'deterministic-v1'}
         with database() as db:
             patient_or_404(db, patient_id)
             db.execute('INSERT OR IGNORE INTO sessions VALUES (?,?,?)', (result['id'], patient_id, json.dumps(result)))
@@ -150,7 +164,7 @@ def create_app(database_path: str | Path | None = None) -> FastAPI:
     @app.post('/api/patients', status_code=201)
     def create_patient(body: ProfileInput):
         patient_id = 'user-' + str(uuid4())
-        payload = {'dataSource': 'user', 'profile': {'id': patient_id, **body.model_dump(), 'diagnosis': 'Not assessed', 'ashaWorker': '', 'hospital': ''}, 'memories': [], 'knownFaces': [], 'trendData': [], 'gameSessions': [], 'reminders': []}
+        payload = {'dataSource': 'user', 'profile': {'id': patient_id, **body.model_dump()}, 'memories': [], 'knownFaces': [], 'trendData': [], 'gameSessions': [], 'reminders': []}
         with database() as db:
             db.execute('INSERT INTO patients(id,payload) VALUES (?,?)', (patient_id,json.dumps(payload)))
         return {'id': patient_id}
@@ -199,7 +213,7 @@ def create_app(database_path: str | Path | None = None) -> FastAPI:
     @app.post('/api/patients/{patient_id}/memories', status_code=201)
     def add_memory(patient_id: str, body: MemoryInput):
         item = {'id':str(uuid4()),'createdAt':datetime.now(timezone.utc).isoformat(),**body.model_dump(exclude={'version'})}
-        return change_memory(patient_id,body.version,lambda items:items.append(item))
+        return {'id':item['id'],**change_memory(patient_id,body.version,lambda items:items.append(item))}
 
     @app.patch('/api/patients/{patient_id}/memories/{memory_id}')
     def edit_memory(patient_id: str, memory_id: str, body: MemoryInput):
@@ -217,6 +231,9 @@ def create_app(database_path: str | Path | None = None) -> FastAPI:
             items.remove(item)
         return change_memory(patient_id,version,update)
 
+    install_receipts(app, database)
+    install(app, database, patient_or_404, patient, db_path, ActivityInput)
+    app.add_middleware(CORSMiddleware, allow_origins=os.environ.get('ALLOWED_ORIGINS', 'http://localhost:3002,http://127.0.0.1:3002').split(','), allow_methods=['GET','POST','PATCH','DELETE'], allow_headers=['Content-Type','X-Operation-ID'])
     return app
 
 app = create_app()

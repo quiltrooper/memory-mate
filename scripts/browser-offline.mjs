@@ -1,0 +1,30 @@
+import assert from 'node:assert/strict';
+import {unlock} from './browser-common.mjs';
+const {chromium}=await import(process.env.PLAYWRIGHT_MODULE||'playwright');
+const browser=await chromium.launch({executablePath:process.env.BROWSER_EXECUTABLE,headless:true});
+try{
+ const context=await browser.newContext({viewport:{width:1280,height:1000},serviceWorkers:'allow'});
+ let disconnected=false;const page=await context.newPage();const errors=[];page.on('pageerror',e=>errors.push(e.message));
+ await page.route('http://127.0.0.1:8000/api/**',async route=>{if(disconnected){await route.abort('internetdisconnected');return;}const response=await route.fetch({url:route.request().url().replace('http://127.0.0.1:8000',process.env.TEST_API_URL||'http://127.0.0.1:8003')});await route.fulfill({response});});
+ await page.goto('http://127.0.0.1:3002');await unlock(page);
+ await page.waitForFunction(()=>Object.keys(JSON.parse(localStorage.getItem('mm_flutter_state')||'{}').cache||{}).filter(k=>/^\/api\/patients\//.test(k)).length>=103);
+ await page.evaluate(()=>navigator.serviceWorker.ready);
+ await page.waitForFunction(()=>navigator.serviceWorker.controller?.scriptURL.endsWith('offline-sw.js'));
+ await page.reload();await unlock(page);
+ await page.getByRole('button',{name:'Patient profile Bhaben Borah'}).waitFor();
+ disconnected=true;await context.setOffline(true);await page.reload({waitUntil:'domcontentloaded'});await unlock(page);
+ await page.getByRole('button',{name:'Patient profile Bhaben Borah'}).waitFor();
+ await page.getByRole('button',{name:'Games Tab 4 of 5'}).click();await page.getByRole('button',{name:'Start word recall'}).click();
+ await page.getByRole('button',{name:'Check my words'}).waitFor({timeout:12000});await page.getByRole('button',{name:'Check my words'}).click();
+ await page.waitForFunction(()=>JSON.parse(localStorage.getItem('mm_flutter_state')).items.some(q=>q.path.endsWith('/sessions')));
+ const before=await page.evaluate(()=>JSON.parse(localStorage.getItem('mm_flutter_state')).items);const activity=before.find(q=>q.path.endsWith('/sessions')).body.activity_id;
+ await page.reload({waitUntil:'domcontentloaded'});await unlock(page);
+ await page.waitForFunction(()=>JSON.parse(localStorage.getItem('mm_flutter_state')).items.length>0);
+ disconnected=false;await context.setOffline(false);
+ await page.getByRole('button',{name:'Sync now',exact:true}).click();
+ await page.waitForFunction(()=>JSON.parse(localStorage.getItem('mm_flutter_state')).items.length===0);
+ const data=await(await page.request.get(`${process.env.TEST_API_URL||'http://127.0.0.1:8003'}/api/patients/launch-demo-1`)).json();
+ assert.equal(data.recordedSessions.filter(s=>s.activity_id===activity).length,1);assert.equal(data.recordedSessions.find(s=>s.activity_id===activity).score,0);
+ assert.deepEqual(errors,[]);
+ console.log('PASS cached app shell and all profiles work without network; zero-score game survives offline reload and syncs once');
+}finally{await browser.close();}

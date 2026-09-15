@@ -1,9 +1,12 @@
+import 'parity_messages.dart';
+
 String translate(
   String language,
   String key, [
   Map<String, Object?> values = const {},
 ]) {
-  var result = messages[language]?[key] ?? key;
+  var result =
+      messages[language]?[key] ?? parityMessages[language]?[key] ?? key;
   for (final entry in values.entries) {
     result = result.replaceAll('{${entry.key}}', '${entry.value}');
   }
@@ -12,13 +15,19 @@ String translate(
 
 const messages = <String, Map<String, String>>{
   'hi': {
-"No patients available.":"कोई प्रोफ़ाइल उपलब्ध नहीं है।",
-"Cannot reach Memory Mate. Check that the local backend is running, then retry.":"Memory Mate से संपर्क नहीं हो रहा। स्थानीय सर्वर चालू करके फिर कोशिश करें।",
-"Unable to load this patient. Please retry.":"प्रोफ़ाइल लोड नहीं हुई। फिर कोशिश करें।",
-"This reminder changed elsewhere. Refresh and try again.":"अनुस्मारक दूसरी जगह बदला गया है। ताज़ा करके फिर कोशिश करें।",
-"Record changed elsewhere. Refresh and retry.":"रिकॉर्ड दूसरी जगह बदला गया है। ताज़ा करके फिर कोशिश करें।",
-"Could not save or load this record ({status}).":"रिकॉर्ड सहेज या लोड नहीं सके ({status})।",
-"Please check the supplied fields. ({status})":"भरी गई जानकारी जाँचें। ({status})",
+    "No patients available.": "कोई प्रोफ़ाइल उपलब्ध नहीं है।",
+    "Cannot reach Memory Mate. Check that the local backend is running, then retry.":
+        "Memory Mate से संपर्क नहीं हो रहा। स्थानीय सर्वर चालू करके फिर कोशिश करें।",
+    "Unable to load this patient. Please retry.":
+        "प्रोफ़ाइल लोड नहीं हुई। फिर कोशिश करें।",
+    "This reminder changed elsewhere. Refresh and try again.":
+        "अनुस्मारक दूसरी जगह बदला गया है। ताज़ा करके फिर कोशिश करें।",
+    "Record changed elsewhere. Refresh and retry.":
+        "रिकॉर्ड दूसरी जगह बदला गया है। ताज़ा करके फिर कोशिश करें।",
+    "Could not save or load this record ({status}).":
+        "रिकॉर्ड सहेज या लोड नहीं सके ({status})।",
+    "Please check the supplied fields. ({status})":
+        "भरी गई जानकारी जाँचें। ({status})",
     "Required": "आवश्यक",
     "Retry": "फिर कोशिश करें",
     "true": "हाँ",
@@ -150,13 +159,19 @@ const messages = <String, Map<String, String>>{
     'Play again': 'फिर खेलें',
   },
   'as': {
-"No patients available.":"কোনো প্ৰফাইল উপলব্ধ নাই।",
-"Cannot reach Memory Mate. Check that the local backend is running, then retry.":"Memory Mateৰ সৈতে সংযোগ হোৱা নাই। স্থানীয় চাৰ্ভাৰ চলাই আকৌ চেষ্টা কৰক।",
-"Unable to load this patient. Please retry.":"প্ৰফাইল লোড নহ’ল। আকৌ চেষ্টা কৰক।",
-"This reminder changed elsewhere. Refresh and try again.":"সোঁৱৰণী আন ঠাইত সলনি হৈছে। সতেজ কৰি আকৌ চেষ্টা কৰক।",
-"Record changed elsewhere. Refresh and retry.":"নথি আন ঠাইত সলনি হৈছে। সতেজ কৰি আকৌ চেষ্টা কৰক।",
-"Could not save or load this record ({status}).":"নথি সংৰক্ষণ বা লোড কৰিব নোৱাৰিলোঁ ({status})।",
-"Please check the supplied fields. ({status})":"দিয়া তথ্য পৰীক্ষা কৰক। ({status})",
+    "No patients available.": "কোনো প্ৰফাইল উপলব্ধ নাই।",
+    "Cannot reach Memory Mate. Check that the local backend is running, then retry.":
+        "Memory Mateৰ সৈতে সংযোগ হোৱা নাই। স্থানীয় চাৰ্ভাৰ চলাই আকৌ চেষ্টা কৰক।",
+    "Unable to load this patient. Please retry.":
+        "প্ৰফাইল লোড নহ’ল। আকৌ চেষ্টা কৰক।",
+    "This reminder changed elsewhere. Refresh and try again.":
+        "সোঁৱৰণী আন ঠাইত সলনি হৈছে। সতেজ কৰি আকৌ চেষ্টা কৰক।",
+    "Record changed elsewhere. Refresh and retry.":
+        "নথি আন ঠাইত সলনি হৈছে। সতেজ কৰি আকৌ চেষ্টা কৰক।",
+    "Could not save or load this record ({status}).":
+        "নথি সংৰক্ষণ বা লোড কৰিব নোৱাৰিলোঁ ({status})।",
+    "Please check the supplied fields. ({status})":
+        "দিয়া তথ্য পৰীক্ষা কৰক। ({status})",
     "Required": "প্ৰয়োজনীয়",
     "Retry": "আকৌ চেষ্টা কৰক",
     "true": "হয়",

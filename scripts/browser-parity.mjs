@@ -1,0 +1,86 @@
+import assert from 'node:assert/strict';
+const {chromium}=await import(process.env.PLAYWRIGHT_MODULE||'playwright');
+const runId=Date.now();const caregiverTitle='Parity caregiver reminder '+runId,offlineTitle='Offline created reminder '+runId,offlineName='Offline parity profile '+runId,faceName='Parity sister '+runId;
+const testApi=process.env.TEST_API_URL||'http://127.0.0.1:8003';
+const browser=await chromium.launch({executablePath:process.env.BROWSER_EXECUTABLE,headless:true});
+try{
+ const context=await browser.newContext({viewport:{width:1360,height:1000},serviceWorkers:'block'});
+ const page=await context.newPage();const errors=[];page.on('pageerror',e=>errors.push(e.message));
+ await page.route('http://127.0.0.1:8000/api/**',async route=>{const response=await route.fetch({url:route.request().url().replace('http://127.0.0.1:8000',testApi)});await route.fulfill({response});});
+ async function enter(name,value){const field=page.getByRole('textbox',{name,exact:true});await field.click();await field.press('ControlOrMeta+A');await field.pressSequentially(value,{delay:25});await field.press('Tab');}
+ async function save(){await page.getByRole('button',{name:'Save',exact:true}).click();await page.getByRole('alertdialog').waitFor({state:'hidden'});}
+ await page.goto('http://127.0.0.1:3002');
+ await enter('PIN','4782');await enter('Confirm PIN','4782');await page.getByRole('button',{name:'Set PIN and open'}).click();
+ await page.getByRole('button',{name:'Patient profile Bhaben Borah'}).waitFor();
+ console.log('PASS PIN setup unlocks app');
+ await page.getByRole('checkbox',{name:'Caregiver mode',exact:true}).click();
+ assert.match(await page.locator('body').ariaSnapshot(),/Caregiver dashboard/);
+ await page.getByRole('button',{name:'Add reminder',exact:true}).click();
+ await enter('Title',caregiverTitle);await enter('Notes','Supplied schedule instructions');await enter('Assigned by','Parity ASHA');await save();
+ await page.getByRole('checkbox',{name:new RegExp(caregiverTitle)}).waitFor({timeout:8000}).catch(async e=>{console.log(await page.locator('body').ariaSnapshot());throw e;});
+ let data=await(await page.request.get(`${testApi}/api/patients/launch-demo-1`)).json();
+ const reminder=data.reminders.find(r=>r.title===caregiverTitle);assert.equal(reminder.assignedBy,'Parity ASHA');assert.equal(reminder.notes,'Supplied schedule instructions');
+ await page.getByRole('checkbox',{name:'Patient mode',exact:true}).click();
+ await page.getByRole('checkbox',{name:new RegExp(caregiverTitle)}).waitFor();
+ console.log('PASS caregiver schedule is shared with patient mode');
+ await page.getByRole('button',{name:'Assistant Tab 5 of 5'}).click();
+ await page.getByRole('button',{name:'Add family photo',exact:true}).click();
+ await enter('Name',faceName);await enter('Relationship','Sister');await enter('Notes','A user supplied label');await save();
+ await page.getByRole('button',{name:'Edit photo label',exact:true}).last().waitFor();
+ assert.match(await page.locator('body').ariaSnapshot(),new RegExp(faceName));
+ await enter('Your message','What reminders are saved?');await page.getByRole('button',{name:'Send',exact:true}).click();
+ await page.getByRole('group',{name:/Saved records only/}).waitFor({timeout:20000}).catch(async e=>{console.log(await page.locator('body').ariaSnapshot());throw e;});
+ assert.match(await page.locator('body').ariaSnapshot(),new RegExp(caregiverTitle));
+ console.log('PASS labeled family photos and honest assistant fallback');
+ await page.getByRole('checkbox',{name:'Offline mode',exact:true}).click();
+ await page.getByRole('checkbox',{name:'Caregiver mode',exact:true}).click();
+ await page.getByRole('button',{name:'Add reminder',exact:true}).click();await enter('Title',offlineTitle);await save();
+ assert.match(await page.locator('body').ariaSnapshot(),/pending changes/);
+ data=await(await page.request.get(`${testApi}/api/patients/launch-demo-1`)).json();assert.ok(!data.reminders.some(r=>r.title===offlineTitle));
+ const state=await page.evaluate(()=>JSON.parse(localStorage.getItem('mm_flutter_state')));assert.equal(state.items.length,1);
+ await page.reload();await enter('PIN','4782');await page.getByRole('button',{name:'Unlock',exact:true}).click();
+ // Reconnection on unlock replays the durable outbox.
+ await page.waitForFunction(()=>JSON.parse(localStorage.getItem('mm_flutter_state')).items.length===0);
+ data=await(await page.request.get(`${testApi}/api/patients/launch-demo-1`)).json();assert.equal(data.reminders.filter(r=>r.title===offlineTitle).length,1);
+ console.log('PASS offline reminder survives reload and syncs once');
+ await page.getByRole('checkbox',{name:'Offline mode',exact:true}).click();
+ await page.getByRole('button',{name:'Add patient',exact:true}).click();await enter('Name',offlineName);await enter('Age','69');await save();
+ await page.getByRole('button',{name:'Patient profile '+offlineName}).waitFor();
+ await page.getByRole('checkbox',{name:'Caregiver mode',exact:true}).click();await page.getByRole('button',{name:'Add reminder',exact:true}).click();await enter('Title','Dependent offline reminder');await save();
+ await page.getByRole('checkbox',{name:'Offline mode',exact:true}).click();await page.getByRole('button',{name:'Sync now',exact:true}).click();
+ await page.waitForFunction(()=>JSON.parse(localStorage.getItem('mm_flutter_state')).items.length===0);
+ const profiles=await(await page.request.get(`${testApi}/api/patients`)).json();const created=profiles.find(p=>p.profile.name===offlineName);assert.ok(created);
+ data=await(await page.request.get(`${testApi}/api/patients/${created.profile.id}`)).json();assert.equal(data.reminders[0].title,'Dependent offline reminder');
+ console.log('PASS offline profile and dependent reminder IDs reconcile');
+ await page.getByRole('button',{name:'Patient profile '+offlineName}).waitFor();
+ const downloadPromise=page.waitForEvent('download');await page.getByRole('button',{name:'Download backup',exact:true}).click();const download=await downloadPromise;assert.equal(download.suggestedFilename(),'memory-mate-backup.json');
+
+ const {readFile}=await import('node:fs/promises');
+ const backup=JSON.parse(await readFile(await download.path(),'utf8'));
+ assert.ok(backup.patients.length>=103);
+ const restoreProfile=backup.patients.find(p=>p.profile.id===created.profile.id);
+ restoreProfile.profile.name=offlineName+' restored';
+ const chooserPromise=page.waitForEvent('filechooser');
+ await page.getByRole('button',{name:'Restore backup',exact:true}).click();
+ await (await chooserPromise).setFiles({name:'parity-backup.json',mimeType:'application/json',buffer:Buffer.from(JSON.stringify({...backup,patients:[restoreProfile]}))});
+ await enter('Type RESTORE to confirm','RESTORE');await save();
+ await page.getByRole('button',{name:'Patient profile '+offlineName+' restored'}).waitFor();
+ data=await(await page.request.get(`${testApi}/api/patients/${created.profile.id}`)).json();assert.equal(data.profile.name,offlineName+' restored');
+ assert.equal(data.reminders[0].title,'Dependent offline reminder');
+ console.log('PASS downloaded backup restores through file picker and confirmation without losing reminders');
+
+ await page.getByRole('checkbox',{name:'Offline mode',exact:true}).click();
+ await page.getByRole('button',{name:'Edit reminder',exact:true}).click();await enter('Title','My offline conflict choice');await save();
+ const latest=data.reminders[0];
+ const concurrent=await page.request.patch(`${testApi}/api/patients/${created.profile.id}/reminders/${latest.id}`,{data:{title:'Other device choice',time:latest.time,category:latest.category,completed:latest.completed,notes:latest.notes,assignedBy:latest.assignedBy,version:latest.version}});assert.ok(concurrent.ok(),await concurrent.text());
+ await page.getByRole('checkbox',{name:'Offline mode',exact:true}).click();await page.getByRole('button',{name:'Sync now',exact:true}).click();
+ await page.getByRole('button',{name:'Review pending changes',exact:true}).waitFor();
+ assert.equal((await(await page.request.get(`${testApi}/api/patients/${created.profile.id}`)).json()).reminders[0].title,'Other device choice');
+ await page.getByRole('button',{name:'Review pending changes',exact:true}).click();await page.getByRole('button',{name:'Keep my change',exact:true}).click();
+ await page.waitForFunction(()=>JSON.parse(localStorage.getItem('mm_flutter_state')).items.length===0);
+ assert.equal((await(await page.request.get(`${testApi}/api/patients/${created.profile.id}`)).json()).reminders[0].title,'My offline conflict choice');
+ console.log('PASS conflicting offline edit requires explicit choice before replacing newer server values');
+ await page.setViewportSize({width:390,height:844});assert.match(await page.locator('body').ariaSnapshot(),/Caregiver dashboard/);
+ await page.getByRole('button',{name:'Lock',exact:true}).click();await page.getByRole('button',{name:'Unlock',exact:true}).waitFor();
+ assert.deepEqual(errors,[]);console.log('PASS backup download, mobile caregiver mode, lock, and no uncaught browser errors');
+}finally{await browser.close();}
