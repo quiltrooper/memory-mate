@@ -1,5 +1,5 @@
-const CACHE='memory-mate-flutter-parity-v1';
-const SHELL=['./','index.html','main.dart.js','flutter.js','flutter_bootstrap.js','parity_bridge.js','manifest.json','memory-mate.svg','assets/AssetManifest.bin','assets/FontManifest.json','assets/fonts/MaterialIcons-Regular.otf','canvaskit/canvaskit.js','canvaskit/canvaskit.wasm','canvaskit/chromium/canvaskit.js','canvaskit/chromium/canvaskit.wasm'];
+const CACHE='memory-mate-flutter-parity-v2';
+const SHELL=['./','index.html','main.dart.js','flutter.js','flutter_bootstrap.js','parity_bridge.js','speech.js','demo-memories/tea-walk.png','demo-memories/bihu-courtyard.png','demo-memories/river-ferry.png','demo-memories/golden-loom.png','demo-memories/kitchen-sweets.png','demo-memories/mountain-courtyard.png','manifest.json','memory-mate.svg','assets/AssetManifest.bin','assets/FontManifest.json','assets/fonts/MaterialIcons-Regular.otf','canvaskit/canvaskit.js','canvaskit/canvaskit.wasm','canvaskit/chromium/canvaskit.js','canvaskit/chromium/canvaskit.wasm'];
 self.addEventListener('install',event=>event.waitUntil(caches.open(CACHE).then(c=>c.addAll(SHELL)).then(()=>self.skipWaiting())));
 self.addEventListener('activate',event=>event.waitUntil(self.clients.claim()));
 self.addEventListener('fetch',event=>{

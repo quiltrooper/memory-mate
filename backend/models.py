@@ -1,3 +1,4 @@
+import re
 from typing import Literal
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
@@ -44,6 +45,6 @@ class MemoryInput(StrictModel):
     @field_validator('imageUrl')
     @classmethod
     def safe_image_url(cls, value):
-        if value and not value.startswith('https://'):
+        if value and not value.startswith('https://') and not re.fullmatch(r'/demo-memories/[a-z0-9-]+\.png', value):
             raise ValueError('Use an HTTPS image URL or leave it blank')
         return value

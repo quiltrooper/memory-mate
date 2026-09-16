@@ -20,7 +20,7 @@
       if(!v && voices.length) return JSON.stringify('No voice for this language is installed. The text remains available.');
       if(v)u.voice=v;u.rate=.85;speechSynthesis.speak(u);return JSON.stringify('');
     }
-    if(name==='stopSpeech'){speechSynthesis?.cancel();return 'true';}
+    if(name==='stopSpeech'){window.speechSynthesis?.cancel();return 'true';}
     throw Error('Unsupported browser operation');
   };
   window.mmAsync = async (name,payload) => {
@@ -46,13 +46,7 @@
         }else resolve(JSON.stringify(await f.text()));
       };input.click();
     });
-    if(name==='listen')return new Promise((resolve,reject)=>{
-      const Recognition=window.SpeechRecognition||window.webkitSpeechRecognition;
-      if(!Recognition){reject(Error('Voice input is unavailable. Please type your message.'));return;}
-      const r=new Recognition();r.lang=locale(p.language);r.interimResults=false;r.maxAlternatives=1;
-      let result='';r.onresult=e=>{result=e.results[0][0].transcript;};r.onerror=()=>reject(Error('Microphone unavailable or no speech detected. Please type instead.'));
-      r.onend=()=>resolve(JSON.stringify(result));r.start();setTimeout(()=>r.stop(),15000);
-    });
+    if(['listen','speak','stopListening'].includes(name))return JSON.stringify(await window.mmSpeech(name,p));
     if(name==='install'){
       if(!installPrompt)return JSON.stringify('Use your browser menu to install this app if available.');
       await installPrompt.prompt();await installPrompt.userChoice;installPrompt=null;return JSON.stringify('');

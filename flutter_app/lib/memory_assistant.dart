@@ -25,36 +25,66 @@ class MemoryAssistant extends StatefulWidget {
 class _MemoryAssistantState extends State<MemoryAssistant> {
   final input = TextEditingController();
   final List<Map<String, String>> messages = [];
-  bool busy = false;
+  bool busy = false, listening = false;
   String? image, status;
   String t(String key, [Map<String, Object?> values = const {}]) =>
       translate(widget.language, key, values);
   @override
   void dispose() {
+    browserAsync('stopListening');
+    browserCall('stopSpeech');
     input.dispose();
     super.dispose();
   }
 
-  void speak(String text) {
-    final warning = browserCall('speak', {
-      'text': text,
-      'language': widget.language,
-    });
-    if (warning is String && warning.isNotEmpty) {
-      setState(() => status = warning);
+  Future<void> speak(String text) async {
+    try {
+      final result = await browserAsync('speak', {
+        'text': text,
+        'language': widget.language,
+      });
+      if (mounted) setState(() => status = result?['error']);
+    } catch (_) {
+      if (mounted) {
+        setState(
+          () => status =
+              'Audio playback failed. Check your browser and speaker output.',
+        );
+      }
     }
   }
 
   Future<void> listen() async {
+    if (listening) {
+      await browserAsync('stopListening');
+      return;
+    }
+    setState(() {
+      listening = true;
+      status = 'Listening… Speak your message, then pause.';
+    });
     try {
-      final text = await browserAsync('listen', {'language': widget.language});
-      if (mounted && text is String) input.text = text;
-    } catch (e) {
+      final result = await browserAsync('listen', {
+        'language': widget.language,
+      });
+      if (!mounted) return;
+      if (result?['text'] is String) {
+        input.text = result['text'];
+        input.selection = TextSelection.collapsed(offset: input.text.length);
+      }
+      setState(
+        () => status =
+            result?['error'] ??
+            'Voice captured. Check the text, then press Send.',
+      );
+    } catch (_) {
       if (mounted) {
         setState(
           () => status = t('Voice input unavailable. Please type instead.'),
         );
       }
+    } finally {
+      if (mounted) setState(() => listening = false);
     }
   }
 
@@ -169,7 +199,7 @@ class _MemoryAssistantState extends State<MemoryAssistant> {
         ),
       ),
       if (status != null)
-        Text(status!, style: const TextStyle(color: Colors.deepOrange)),
+        Text(t(status!), style: const TextStyle(color: Colors.deepOrange)),
       const SizedBox(height: 16),
       for (final m in messages)
         Card(
@@ -211,10 +241,13 @@ class _MemoryAssistantState extends State<MemoryAssistant> {
       Wrap(
         spacing: 8,
         children: [
-          FilledButton(onPressed: busy ? null : send, child: Text(t('Send'))),
+          FilledButton(
+            onPressed: busy || listening ? null : send,
+            child: Text(t('Send')),
+          ),
           OutlinedButton(
             onPressed: busy ? null : listen,
-            child: Text(t('Voice input')),
+            child: Text(t(listening ? 'Stop listening' : 'Voice input')),
           ),
           OutlinedButton(
             onPressed: busy ? null : attach,

@@ -1,0 +1,9 @@
+# Voice and demo-memory update — 16 September 2026
+
+Voice input now shows listening state, supports stopping, retains the recognized text for review, and distinguishes blocked permission, missing hardware, unsupported language and recognition-network failures. Read-aloud waits briefly for voice enumeration, retains the utterance and reports playback failures or a missing language voice. Both the assistant and memory cards use this path.
+
+The first demo profile uses Assamese. A browser that lacks Assamese recognition or an installed Assamese voice cannot provide that capability through these fixes alone. For a laptop check, allow the site's microphone permission, confirm the system input/output devices and try English in Profile settings if Assamese is unavailable. Recognition may use the browser vendor's online service; this requires review before real-resident use.
+
+Six AI-generated illustrations are bundled in flutter_app/web/demo-memories: tea garden, Bihu courtyard, river ferry, handloom, kitchen and mountain courtyard. Each seeded profile has three distinct illustrated fictional stories. The six-image pool is reused across demo profiles, not presented as 309 unique photographs. All captions disclose fictional demo content and generated imagery. No real person's memories are inferred. The local update backed up SQLite and replaced only memory collections still exactly matching the earlier seed; all 103 matched. Existing deployed databases are not automatically overwritten by the new seed file.
+
+Validation: nine backend tests, four Flutter tests and clean Flutter analysis passed. scripts/speech-test.mjs verifies speech lifecycle and failure paths. scripts/browser-voice.mjs verifies captured names, permission feedback, memory-card playback wiring and local image availability with simulated browser speech. Actual microphone input and audible output require verification on the user's laptop. The release web build succeeded.

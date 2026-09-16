@@ -125,6 +125,9 @@ class _RecordDialogState extends State<RecordDialog> {
                             if (['imageUrl', 'photoUrl'].contains(entry.key) &&
                                 text.isNotEmpty &&
                                 !text.startsWith('https://') &&
+                                !RegExp(
+                                  r'^/demo-memories/[a-z0-9-]+\.png$',
+                                ).hasMatch(text) &&
                                 !(entry.key == 'photoUrl' &&
                                     RegExp(
                                       r'^data:image/(png|jpeg|webp);base64,[A-Za-z0-9+/=]+$',

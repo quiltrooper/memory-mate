@@ -1,5 +1,11 @@
 const parityMessages = <String, Map<String, String>>{
   "hi": {
+    "Stop listening": "सुनना रोकें",
+    "Listening… Speak your message, then pause.":
+        "सुन रहा है… अपना संदेश बोलें, फिर रुकें।",
+    "Voice captured. Check the text, then press Send.":
+        "आवाज़ दर्ज हुई। पाठ जाँचें, फिर भेजें दबाएँ।",
+
     "Review pending changes": "लंबित बदलाव देखें",
     "Export and discard": "निर्यात करें और हटाएँ",
     "Keep my change": "मेरा बदलाव रखें",
@@ -129,6 +135,12 @@ const parityMessages = <String, Map<String, String>>{
         "सहेजे अनुस्मारक और यादों के बारे में पूछें। तस्वीरों के विवरण आप देते हैं; यह चेहरा पहचान नहीं है।",
   },
   "as": {
+    "Stop listening": "শুনা বন্ধ কৰক",
+    "Listening… Speak your message, then pause.":
+        "শুনি আছে… আপোনাৰ বাৰ্তা কওক, তাৰ পিছত ৰওক।",
+    "Voice captured. Check the text, then press Send.":
+        "কথা লিখা হৈছে। পাঠ পৰীক্ষা কৰি পঠিয়াওক টিপক।",
+
     "Review pending changes": "বাকী পৰিৱৰ্তনসমূহ চাওক",
     "Export and discard": "ৰপ্তানি কৰি আঁতৰাওক",
     "Keep my change": "মোৰ পৰিৱৰ্তন ৰাখক",

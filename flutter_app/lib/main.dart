@@ -476,9 +476,18 @@ class _HomeState extends State<Home> {
     }
   }
 
-  void readText(String text) {
-    final warning = browserCall('speak', {'text': text, 'language': language});
-    if (warning is String && warning.isNotEmpty) notice(warning);
+  Future<void> readText(String text) async {
+    try {
+      final result = await browserAsync('speak', {
+        'text': text,
+        'language': language,
+      });
+      if (mounted && result?['error'] is String) notice(result['error']);
+    } catch (_) {
+      if (mounted) {
+        notice('Audio playback failed. Check your browser and speaker output.');
+      }
+    }
   }
 
   Future<void> exportData({bool all = false}) async {
@@ -893,7 +902,7 @@ class _HomeState extends State<Home> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Image.network(
-                memory['imageUrl'],
+                Uri.base.resolve(memory['imageUrl']).toString(),
                 height: 210,
                 width: double.infinity,
                 fit: BoxFit.cover,
